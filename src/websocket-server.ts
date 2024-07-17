@@ -10,7 +10,7 @@ export class WsServer {
   private _peerRepository: PeerRepository;
   private _swarm: Hyperswarm;
 
-  constructor(port = 4002, peerRepository: PeerRepository, swarm: Hyperswarm) {
+  constructor(port: number, peerRepository: PeerRepository, swarm: Hyperswarm) {
     this._peerRepository = peerRepository;
     this._swarm = swarm;
     this.start(port);

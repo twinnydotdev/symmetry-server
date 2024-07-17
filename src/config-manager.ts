@@ -65,6 +65,11 @@ export class ConfigManager {
     if (!config.path) {
       throw new Error("Missing required field in server configuration: path");
     }
+    if (!config.webSocketPort) {
+      throw new Error(
+        "Missing required field in server configuration: webSocketPort"
+      );
+    }
   }
 
   get<K extends keyof ClientConfig>(key: K): ClientConfig[K];
