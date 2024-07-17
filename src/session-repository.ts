@@ -1,6 +1,6 @@
 import { database } from "./database";
 import { Database } from "sqlite3";
-import { Session, SessionWithPeer } from "./types";
+import { Session, PeerWithSession } from "./types";
 
 export class SessionRepository {
   private db: Database;
@@ -38,7 +38,7 @@ export class SessionRepository {
         FROM sessions s
         WHERE s.id = ?
       `;
-      this.db.get(sql, [id], (err, row: SessionWithPeer) => {
+      this.db.get(sql, [id], (err, row: PeerWithSession) => {
         if (err) {
           reject(err);
         } else if (row) {
@@ -92,7 +92,7 @@ export class SessionRepository {
     });
   };
 
-  getAllActiveSessions = (): Promise<SessionWithPeer[]> => {
+  getAllActiveSessions = (): Promise<PeerWithSession[]> => {
     return new Promise((resolve, reject) => {
       const sql = `
         SELECT s.id, s.provider_id as providerId, s.created_at as createdAt, s.expires_at as expiresAt,
@@ -101,7 +101,7 @@ export class SessionRepository {
         LEFT JOIN peers p ON s.provider_id = p.id
         WHERE s.expires_at > datetime('now')
       `;
-      this.db.all(sql, [], (err, rows: SessionWithPeer[]) => {
+      this.db.all(sql, [], (err, rows: PeerWithSession[]) => {
         if (err) {
           reject(err);
         } else {

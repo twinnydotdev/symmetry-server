@@ -4,7 +4,12 @@ import Hyperdrive from "hyperdrive";
 import Hyperswarm from "hyperswarm";
 import path from "path";
 
-import { ClientMessage, Peer, PeerUpsert } from "./types";
+import {
+  ClientMessage,
+  Peer,
+  PeerUpsert,
+  PeerSessionRequest,
+} from "./types";
 import { ConfigManager, createConfigManager } from "./config-manager";
 import { createMessage, safeParseJson } from "./utils";
 import { logger } from "./logger";
@@ -40,7 +45,7 @@ export class SymmetryServer {
     await core.ready();
     const discovery = swarm.join(core.discoveryKey, { server: true });
     await discovery.flushed();
-    
+
     swarm.on("connection", (peer: Peer) => {
       const peerKey = peer.publicKey.toString("hex");
       console.log(
@@ -69,7 +74,7 @@ export class SymmetryServer {
 
     peer.on("close", () => {
       const peerKey = peer.publicKey.toString("hex");
-      this._peerRepository.lastSeen(peerKey);
+      this._peerRepository.updateLastSeen(peerKey);
       logger.info(
         `🔗 Connection Closed: Peer ${peerKey.slice(0, 6)}...${peerKey.slice(
           -6
@@ -86,10 +91,10 @@ export class SymmetryServer {
             this.join(peer, data.data as PeerUpsert);
             break;
           case serverMessageKeys.requestProvider:
-            this.handleProviderRequest(peer);
+            this.handlePeerSession(peer, data.data as PeerSessionRequest);
             break;
           case serverMessageKeys.verifySession:
-            this.handleSessionVerification(
+            this.handlePeerSessionValidation(
               peer,
               data.data as {
                 sessionToken: string;
@@ -122,15 +127,17 @@ export class SymmetryServer {
     }
   }
 
-  async handleProviderRequest(peer: Peer) {
+  async handlePeerSession(peer: Peer, randomPeerRequest: PeerSessionRequest) {
     try {
-      const provider = await this._peerRepository.getRandom();
+      const providerPeer = await this._peerRepository.getPeer(
+        randomPeerRequest
+      );
       const sessionToken = await this._sessionManager.createSession(
-        provider.discovery_key
+        providerPeer.discovery_key
       );
       peer.write(
         createMessage(serverMessageKeys.providerDetails, {
-          providerId: provider.key,
+          providerId: providerPeer.key,
           sessionToken,
         })
       );
@@ -141,7 +148,7 @@ export class SymmetryServer {
     }
   }
 
-  async handleSessionVerification(
+  async handlePeerSessionValidation(
     peer: Peer,
     message: {
       sessionToken: string;
@@ -149,22 +156,25 @@ export class SymmetryServer {
   ) {
     if (!message.sessionToken) return;
     try {
-      const providerId = await this._sessionManager.verifySession(
+      const providerDiscoveryKey = await this._sessionManager.verifySession(
         message.sessionToken
       );
-      if (providerId) {
-        const provider = await this._peerRepository.getByDiscoveryKey(
-          providerId
-        );
-        if (provider) {
-          peer.write(
-            createMessage(serverMessageKeys.sessionValid, {
-              discoveryKey: provider.discovery_key,
-            })
-          );
-          await this._sessionManager.extendSession(message.sessionToken);
-        }
-      }
+
+      if (!providerDiscoveryKey) return;
+
+      const providerPeer = await this._peerRepository.getByDiscoveryKey(
+        providerDiscoveryKey
+      );
+
+      if (!providerPeer) return;
+
+      peer.write(
+        createMessage(serverMessageKeys.sessionValid, {
+          discoveryKey: providerPeer.discovery_key,
+        })
+      );
+
+      await this._sessionManager.extendSession(message.sessionToken);
     } catch (error) {
       logger.error(
         `Session verification error: ${

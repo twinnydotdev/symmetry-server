@@ -2,7 +2,7 @@ import { Database } from "sqlite3";
 import chalk from "chalk";
 
 import { database } from "./database";
-import { Peer, PeerUpsert } from "./types";
+import { Peer, PeerSessionRequest, PeerUpsert } from "./types";
 
 export class PeerRepository {
   db: Database;
@@ -11,7 +11,7 @@ export class PeerRepository {
     this.db = database;
   }
 
-  upsert(data: PeerUpsert) {
+  upsert(message: PeerUpsert) {
     return new Promise((resolve, reject) => {
       this.db.run(
         `
@@ -20,12 +20,12 @@ export class PeerRepository {
         ) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, TRUE)
       `,
         [
-          data.key,
-          data.discoveryKey,
-          data.config.gpuMemory,
-          data.config.modelName,
-          data.config.public,
-          data.config.serverKey,
+          message.key,
+          message.discoveryKey,
+          message.config.gpuMemory,
+          message.config.modelName,
+          message.config.public,
+          message.config.serverKey,
         ],
         function (err) {
           if (err) {
@@ -54,10 +54,12 @@ export class PeerRepository {
     });
   }
 
-  getRandom(): Promise<Peer> {
+  getPeer(randomPeerRequest: PeerSessionRequest): Promise<Peer> {
     return new Promise((resolve, reject) => {
+      const { modelName } = randomPeerRequest;
       this.db.get(
-        "SELECT * FROM peers ORDER BY RANDOM() LIMIT 1",
+        `SELECT * FROM peers WHERE model_name = ? ORDER BY RANDOM() LIMIT 1`,
+        [modelName],
         (err, row: Peer) => {
           if (err) {
             reject(err);
@@ -69,19 +71,7 @@ export class PeerRepository {
     });
   }
 
-  getModelsByKey(key: string) {
-    return new Promise((resolve, reject) => {
-      this.db.all("SELECT * FROM peers WHERE key = ?", [key], (err, rows) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(rows);
-        }
-      });
-    });
-  }
-
-  lastSeen(peerKey: string) {
+  updateLastSeen(peerKey: string) {
     return new Promise((resolve, reject) => {
       this.db.run(
         "UPDATE peers SET last_seen = ?, online = FALSE WHERE key = ?",
@@ -115,7 +105,7 @@ export class PeerRepository {
     });
   }
 
-  async getActiveCount(): Promise<number> {
+  async getActivePeerCount(): Promise<number> {
     return new Promise((resolve, reject) => {
       this.db.get(
         "SELECT COUNT(*) as count FROM peers WHERE online = TRUE",

@@ -49,7 +49,7 @@ export class WsServer {
   }
 
   private async getStats(swarm: Hyperswarm) {
-    const activePeers = await this._peerRepository.getActiveCount();
+    const activePeers = await this._peerRepository.getActivePeerCount();
     const activeModels = await this._peerRepository.getActiveModelCount();
     const swarmConnections = swarm.connections.size;
 

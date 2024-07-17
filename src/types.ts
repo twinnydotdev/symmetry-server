@@ -43,7 +43,12 @@ export interface Session {
   expiresAt: Date;
 }
 
-export interface SessionWithPeer extends Session {
+export interface PeerSessionRequest {
+  modelName: string;
+  preferredProviderId?: string;
+}
+
+export interface PeerWithSession extends Session {
   peer_key: string | null;
   discovery_key: string | null;
   model_name: string | null;
