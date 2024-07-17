@@ -87,16 +87,13 @@ export class SymmetryClient {
   }
 
   joinServer = async () => {
-    console.log('connecting')
     const swarm = new Hyperswarm();
     swarm.join(b4a.from(this._config.get("serverKey"), "hex"), {
       client: true,
       server: false,
     });
     swarm.flush();
-    console.log('flushed')
     swarm.on("connection", (peer: Peer) => {
-      console.log('connected')
       peer.write(
         createMessage(serverMessageKeys.join, {
           ...this._config,
