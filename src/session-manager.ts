@@ -11,7 +11,7 @@ interface Session {
 
 export class SessionManager {
   private sessionRepository: SessionRepository;
-  private sessionDuration: number; // in milliseconds
+  private sessionDuration: number;
 
   constructor(
     sessionRepository: SessionRepository,
