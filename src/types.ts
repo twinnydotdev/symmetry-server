@@ -36,6 +36,19 @@ export interface Peer {
   discovery_key: string;
 }
 
+export interface Session {
+  id: string;
+  providerId: string;
+  createdAt: Date;
+  expiresAt: Date;
+}
+
+export interface SessionWithPeer extends Session {
+  peer_key: string | null;
+  discovery_key: string | null;
+  model_name: string | null;
+}
+
 export interface PeerUpsert {
   key: string;
   discoveryKey: string;

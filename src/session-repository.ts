@@ -1,18 +1,6 @@
 import { database } from "./database";
 import { Database } from "sqlite3";
-
-interface Session {
-  id: string;
-  providerId: string;
-  createdAt: Date;
-  expiresAt: Date;
-}
-
-interface SessionWithPeer extends Session {
-  peer_key: string | null;
-  discovery_key: string | null;
-  model_name: string | null;
-}
+import { Session, SessionWithPeer } from "./types";
 
 export class SessionRepository {
   private db: Database;
