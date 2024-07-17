@@ -92,7 +92,6 @@ export class SymmetryClient {
       client: true,
       server: false,
     });
-    console.log(swarm)
     swarm.flush();
     swarm.on("connection", (peer: Peer) => {
       peer.write(
