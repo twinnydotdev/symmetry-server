@@ -2,8 +2,6 @@ import { createServer } from "http";
 import Hyperswarm from "hyperswarm";
 import { WebSocket, WebSocketServer } from "ws";
 import { PeerRepository } from "./peer-repository";
-import { logger } from "./logger";
-import chalk from "chalk";
 
 export class WsServer {
   private _wss: WebSocketServer | undefined;
@@ -20,7 +18,6 @@ export class WsServer {
     const server = createServer();
     this._wss = new WebSocketServer({ server });
     server.listen(port);
-    logger.info(chalk.green(`\u2713 WebSocket started ws://localhost:${port}`));
     this.wssListeners();
   }
 

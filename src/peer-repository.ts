@@ -3,6 +3,7 @@ import chalk from "chalk";
 
 import { database } from "./database";
 import { Peer, PeerSessionRequest, PeerUpsert } from "./types";
+import { logger } from "./logger";
 
 export class PeerRepository {
   db: Database;
@@ -85,17 +86,12 @@ export class PeerRepository {
             reject(err);
           } else {
             if (this.changes > 0) {
-              console.log(
-                chalk.yellow("🕒 Peer disconnected, status updated:"),
-                chalk.cyan(
-                  `Peer ${peerKey.slice(0, 6)}...${peerKey.slice(-6)}`
-                ),
-                chalk.magenta(`Rows affected: ${this.changes}`)
+              logger.info(
+                chalk.yellow("🕒 Peer disconnected"),
               );
             } else {
-              console.log(
-                chalk.yellow("⚠️ Peer not found in database:"),
-                chalk.cyan(`Peer ${peerKey.slice(0, 6)}...${peerKey.slice(-6)}`)
+              logger.info(
+                chalk.yellow("⚠️ Peer not found in database"),
               );
             }
             resolve(this.changes);
@@ -138,7 +134,7 @@ export class PeerRepository {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   updateStats(peerKey: string, data: any) {
     // TODO: Update stats in database
-    console.log(peerKey, data);
+    logger.info(peerKey, data);
   }
 }
 

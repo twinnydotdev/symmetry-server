@@ -32,19 +32,19 @@ export class SessionManager {
     };
 
     await this.sessionRepository.create(session);
-    logger.info(`Session created: ${sessionId} for provider: ${providerId}`);
+    logger.info(`🖇️ Session created: ${sessionId} for provider: ${providerId}`);
     return sessionId;
   }
 
   async verifySession(sessionId: string): Promise<string | null> {
     const session = await this.sessionRepository.get(sessionId);
     if (!session) {
-      logger.warning(`Session not found: ${sessionId}`);
+      logger.warning(`❌ Session not found: ${sessionId}`);
       return null;
     }
 
     if (new Date() > session.expiresAt) {
-      logger.warning(`Session expired: ${sessionId}`);
+      logger.warning(`🕛 Session expired: ${sessionId}`);
       await this.sessionRepository.delete(sessionId);
       return null;
     }
@@ -55,28 +55,29 @@ export class SessionManager {
   async extendSession(sessionId: string): Promise<boolean> {
     const session = await this.sessionRepository.get(sessionId);
     if (!session) {
-      logger.warning(`Cannot extend non-existent session: ${sessionId}`);
+      logger.warning(`🚨 Cannot extend non-existent session: ${sessionId}`);
       return false;
     }
     session.expiresAt = new Date(Date.now() + this.sessionDuration);
     await this.sessionRepository.update(session);
-    logger.info(`Session extended: ${sessionId}`);
+    logger.info(`🎟️ Session extended: ${sessionId}`);
     return true;
   }
 
   async deleteSession(sessionId: string): Promise<boolean> {
     const result = await this.sessionRepository.delete(sessionId);
     if (result) {
-      logger.info(`Session deleted: ${sessionId}`);
+      // cross bin emoji  
+      logger.info(`🗑 Session deleted: ${sessionId}`);
     } else {
-      logger.warning(`Failed to delete session: ${sessionId}`);
+      logger.warning(`🚨 Failed to delete session: ${sessionId}`);
     }
     return result;
   }
 
   async cleanupExpiredSessions(): Promise<number> {
     const deletedCount = await this.sessionRepository.deleteExpired();
-    logger.info(`Cleaned up ${deletedCount} expired sessions`);
+    logger.info(`🕛 Cleaned up ${deletedCount} expired sessions`);
     return deletedCount;
   }
 }

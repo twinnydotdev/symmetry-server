@@ -24,7 +24,7 @@ export class SymmetryClient {
   _providers = new Map();
 
   constructor(configPath: string) {
-    console.log(`🔗 Initializing client using config file: ${configPath}`);
+    logger.info(`🔗 Initializing client using config file: ${configPath}`);
     this._config = createConfigManagerClient(configPath);
     this._providers = new Map();
     this._messageIndex = 0;
@@ -55,9 +55,7 @@ export class SymmetryClient {
     });
 
     provider.swarm.on("connection", (peer: Peer) => {
-      logger.info(
-        `New connection from peer: ${peer.rawStream.remoteHost}`
-      );
+      logger.info(`⚡️ New connection from peer: ${peer.rawStream.remoteHost}`);
       provider.store.replicate(peer);
       this.providerListeners(peer);
     });
@@ -68,18 +66,14 @@ export class SymmetryClient {
       key: provider.core.key?.toString("hex"),
     });
 
-    const info =
-      chalk.green(`🚀 Provider '${name}' initialized\n\n`) +
-      chalk.bold.white("Discovery key:\n") +
-      chalk.white(`🔑 ${provider.core.discoveryKey.toString("hex")}\n`) +
-      chalk.bold.white("Drive key:\n") +
-      chalk.white(`🛢 ${provider.core.key?.toString("hex")}\n`);
-      logger.info(info);
+    logger.info(`📁 Provider: '${name}' initialized!`)
+    logger.info(`🔑 Discovery key: ${provider.core.discoveryKey.toString("hex")}`)
+    logger.info(`🔑 Drive key: ${provider.core.key?.toString("hex")}`)
 
     if (this._isPublic) {
       this._discoveryKey = provider.core.discoveryKey.toString("hex");
-      logger.info(chalk.green("🔗 Joining central server."));
-      logger.info(chalk.white(`🔑 ${this._config.get("serverKey")}`));
+      logger.info(chalk.white(`🔑 Server key: ${this._config.get("serverKey")}`));
+      logger.info(chalk.green("🔗 Joining symmetry server, please wait."));
       await this.joinServer();
     }
   }
@@ -92,7 +86,7 @@ export class SymmetryClient {
     });
     swarm.flush();
     swarm.on("connection", (peer: Peer) => {
-      logger.info(chalk.green("🔗 Joined central server!"));
+      logger.info(chalk.green("\u2713 Connected to server"));
       peer.write(
         createMessage(serverMessageKeys.join, {
           ...this._config,
@@ -181,7 +175,7 @@ export class SymmetryClient {
     } catch (error) {
       let errorMessage = "";
       if (error instanceof Error) errorMessage = error.message;
-      logger.error(errorMessage);
+      logger.error(`🚨 ${errorMessage}`);
     }
   }
 

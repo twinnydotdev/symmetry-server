@@ -27,7 +27,7 @@ export class SymmetryServer {
   private _wsServer: WsServer | undefined;
 
   constructor(configPath: string) {
-    console.log(`🔗 Initializing server using config file: ${configPath}`);
+    logger.info(`🔗 Initializing server using config file: ${configPath}`);
     this._config = createConfigManager(configPath, false);
     if (!this._config.isServerConfig()) {
       throw new Error("Invalid configuration for server");
@@ -47,11 +47,7 @@ export class SymmetryServer {
     await discovery.flushed();
 
     swarm.on("connection", (peer: Peer) => {
-      const peerKey = peer.publicKey.toString("hex");
-      console.log(
-        chalk.green("🔗 New Connection:"),
-        chalk.yellow(`Peer ${peerKey.slice(0, 6)}...${peerKey.slice(-6)}`)
-      );
+      logger.info(`🔗 New Connection: ${peer.rawStream.remoteHost}`);
       store.replicate(peer);
       this.listeners(peer);
     });
@@ -60,13 +56,11 @@ export class SymmetryServer {
       this._peerRepository,
       swarm
     );
-    const info =
-      chalk.green("\u2713 Symmetry server started\n\n") +
-      chalk.bold.white("Server key:\n") +
-      chalk.white(`${core.discoveryKey?.toString("hex")}\n`) +
-      chalk.bold.white("Drive key:\n") +
-      chalk.white(`${core.key?.toString("hex")}`);
-    logger.info(info);
+    logger.info(`🔑 Discovery key: ${core.discoveryKey?.toString("hex")}`)
+    logger.info(`🔑 Drive key: ${core.key?.toString("hex")}`)
+    logger.info(chalk.green(`\u2713 Websocket server started: ws://localhost:${this._config.get("webSocketPort")}`));
+    logger.info(chalk.green(`\u2713 Symmetry server started, waiting for connections...`));
+
   }
 
   listeners(peer: Peer) {
@@ -113,7 +107,7 @@ export class SymmetryServer {
         ...message,
         key: peerKey,
       });
-      logger.info(`Peer joined ${peerKey.slice(0, 6)}...${peerKey.slice(-6)}`);
+      logger.info(`👋 Peer provider joined ${peer.rawStream.remoteHost}`);
       peer.write(
         createMessage(serverMessageKeys.joinAck, {
           status: "success",
@@ -123,7 +117,7 @@ export class SymmetryServer {
     } catch (error: unknown) {
       let errorMessage = "";
       if (error instanceof Error) errorMessage = error.message;
-      logger.error(errorMessage);
+      logger.error(`🚨 ${errorMessage}`);
     }
   }
 
@@ -144,7 +138,7 @@ export class SymmetryServer {
     } catch (error: unknown) {
       let errorMessage = "";
       if (error instanceof Error) errorMessage = error.message;
-      logger.error(errorMessage);
+      logger.error(`🚨 ${errorMessage}`);
     }
   }
 
