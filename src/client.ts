@@ -11,7 +11,6 @@ import path from "path";
 import { ConfigManager, createConfigManagerClient } from "./config-manager";
 import { createMessage, safeParseJson } from "./utils";
 import { logger } from "./logger";
-import { Message } from "@xenova/transformers";
 import { Peer, ClientMessage } from "./types";
 import { serverMessageKeys } from "./constants";
 
@@ -107,7 +106,7 @@ export class SymmetryClient {
   providerListeners(peer: Peer) {
     peer.on("data", async (buffer: Buffer) => {
       if (!buffer) return;
-      const data = safeParseJson<ClientMessage<Message[]>>(buffer.toString());
+      const data = safeParseJson<ClientMessage<{ role: string; content: string }[]>>(buffer.toString());
       if (data) {
         if (data.key) {
           const key = data.key;
@@ -122,7 +121,7 @@ export class SymmetryClient {
     });
   }
 
-  async inference(data: ClientMessage<Message[]>, peer: Peer) {
+  async inference(data: ClientMessage<{ role: string; content: string }[]>, peer: Peer) {
     const messages = data?.data;
     if (!messages || !messages.length) return;
 
