@@ -51,14 +51,12 @@ export class SymmetryClient {
     await discovery.flushed();
 
     provider.swarm.on("error", (err: Error) => {
-      console.error(chalk.red("🚨 Swarm Error:"), err);
+      logger.error(chalk.red("🚨 Swarm Error:"), err);
     });
 
     provider.swarm.on("connection", (peer: Peer) => {
-      const peerKey = peer.publicKey.toString("hex");
-      console.log(
-        chalk.green("🔗 New Connection:"),
-        chalk.yellow(`Peer ${peerKey.slice(0, 6)}...${peerKey.slice(-6)}`)
+      logger.info(
+        `New connection from peer: ${peer.rawStream.remoteHost}`
       );
       provider.store.replicate(peer);
       this.providerListeners(peer);
@@ -76,12 +74,12 @@ export class SymmetryClient {
       chalk.white(`🔑 ${provider.core.discoveryKey.toString("hex")}\n`) +
       chalk.bold.white("Drive key:\n") +
       chalk.white(`🛢 ${provider.core.key?.toString("hex")}\n`);
-    console.log(info);
+      logger.info(info);
 
     if (this._isPublic) {
       this._discoveryKey = provider.core.discoveryKey.toString("hex");
-      console.log(chalk.green("🔗 Joining central server."));
-      console.log(chalk.white(`🔑 ${this._config.get("serverKey")}`));
+      logger.info(chalk.green("🔗 Joining central server."));
+      logger.info(chalk.white(`🔑 ${this._config.get("serverKey")}`));
       await this.joinServer();
     }
   }
@@ -94,6 +92,7 @@ export class SymmetryClient {
     });
     swarm.flush();
     swarm.on("connection", (peer: Peer) => {
+      logger.info(chalk.green("🔗 Joined central server!"));
       peer.write(
         createMessage(serverMessageKeys.join, {
           ...this._config,
