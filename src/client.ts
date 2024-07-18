@@ -73,7 +73,7 @@ export class SymmetryClient {
     if (this._isPublic) {
       this._discoveryKey = provider.core.discoveryKey.toString("hex");
       logger.info(chalk.white(`🔑 Server key: ${this._config.get("serverKey")}`));
-      logger.info(chalk.green("🔗 Joining symmetry server, please wait."));
+      logger.info(chalk.green("🔗 Joining server, please wait."));
       await this.joinServer();
     }
   }
@@ -113,6 +113,7 @@ export class SymmetryClient {
           const key = data.key;
           switch (key) {
             case serverMessageKeys.inference:
+              logger.info(`📦 Inference message received from ${peer.rawStream.remoteHost}`);
               await this.inference(data, peer);
               break;
           }

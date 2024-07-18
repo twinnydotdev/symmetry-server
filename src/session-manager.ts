@@ -32,7 +32,7 @@ export class SessionManager {
     };
 
     await this.sessionRepository.create(session);
-    logger.info(`🖇️ Session created: ${sessionId} for provider: ${providerId}`);
+    logger.info(`🖇️ Session created for provider: ${providerId}`);
     return sessionId;
   }
 
