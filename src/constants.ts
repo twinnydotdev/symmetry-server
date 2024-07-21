@@ -1,13 +1,4 @@
-export const NORMALIZE_REGEX = /\s*\r?\n|\r/g;
-
-export const apiProviders = {
-  LiteLLM: "litellm",
-  LlamaCpp: "llamacpp",
-  Ollama: "ollama",
-  OpenWebUI: "openwebui",
-};
-
-export const serverMessageKeys = {
+export const serverMessageTypes = {
   heartbeat: "heartbeat",
   inference: "inference",
   join: "join",

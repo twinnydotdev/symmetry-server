@@ -1,21 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { serverMessageKeys } from "./constants";
-
-export interface ClientConfig {
-  apiHostname: string;
-  apiKey?: string;
-  apiPath: string;
-  apiPort: number;
-  apiProtocol: string;
-  apiProvider: string;
-  discoveryKey: string;
-  key: string;
-  modelName: string;
-  path: string;
-  port: number;
-  public: boolean;
-  serverKey: string;
-}
+import { serverMessageTypes } from "./constants";
 
 export interface ServerConfig {
   path: string;
@@ -210,4 +194,4 @@ export interface Message {
   content: string | undefined;
 }
 
-export type ServerMessageKey = keyof typeof serverMessageKeys;
+export type ServerMessageKey = keyof typeof serverMessageTypes;

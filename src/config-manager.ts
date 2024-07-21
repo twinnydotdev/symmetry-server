@@ -1,105 +1,48 @@
-import { ClientConfig, ServerConfig } from "./types";
+import { ServerConfig } from "./types";
 import fs from "fs";
 import yaml from "js-yaml";
 
-type Config =
-  | (ClientConfig & { type: "client" })
-  | (ServerConfig & { type: "server" });
+type Config = ServerConfig & { type: "server" };
 
 export class ConfigManager {
   private config: Config;
 
-  constructor(configPath: string, isClient: boolean) {
+  constructor(configPath: string) {
     const configFile = fs.readFileSync(configPath, "utf8");
-    const loadedConfig = yaml.load(configFile) as Partial<
-      ClientConfig & ServerConfig
-    >;
+    const loadedConfig = yaml.load(configFile) as Partial<ServerConfig>;
     this.config = {
       ...loadedConfig,
-      type: isClient ? "client" : "server",
     } as Config;
     this.validate();
   }
 
-  private validate(): void {
-    if (this.config.type === "client") {
-      this.validateClientConfig(this.config);
-    } else {
-      this.validateServerConfig(this.config);
-    }
+  public getAll () {
+    return this.config;
   }
 
-  private validateClientConfig(
-    config: ClientConfig & { type: "client" }
-  ): void {
-    const requiredFields: (keyof ClientConfig)[] = [
-      "apiHostname",
-      "apiPath",
-      "apiPort",
-      "apiProtocol",
-      "apiProvider",
-      "modelName",
+  private validate(): void {
+    const requiredFields: (keyof ServerConfig)[] = [
       "path",
-      "public",
-      "serverKey",
+      "webSocketPort"
     ];
 
     for (const field of requiredFields) {
-      if (!(field in config)) {
+      if (!(field in this.config)) {
         throw new Error(
           `Missing required field in client configuration: ${field}`
         );
       }
     }
 
-    if (typeof config.public !== "boolean") {
+    if (typeof this.config.webSocketPort !== "number") {
       throw new Error(
-        'The "public" field in client configuration must be a boolean'
+        `Invalid value for webSocketPort in client configuration: ${this.config.webSocketPort}`
       );
     }
   }
 
-  private validateServerConfig(
-    config: ServerConfig & { type: "server" }
-  ): void {
-    if (!config.path) {
-      throw new Error("Missing required field in server configuration: path");
-    }
-    if (!config.webSocketPort) {
-      throw new Error(
-        "Missing required field in server configuration: webSocketPort"
-      );
-    }
-  }
-
-  get<K extends keyof ClientConfig>(key: K): ClientConfig[K];
   get<K extends keyof ServerConfig>(key: K): ServerConfig[K];
   get(key: string): unknown {
     return this.config[key as keyof Config];
   }
-
-  isClientConfig(): this is ConfigManager & {
-    config: ClientConfig & { type: "client" };
-  } {
-    return this.config.type === "client";
-  }
-
-  isServerConfig(): this is ConfigManager & {
-    config: ServerConfig & { type: "server" };
-  } {
-    return this.config.type === "server";
-  }
-}
-
-export function createConfigManager(
-  configPath: string,
-  isClient: boolean
-): ConfigManager {
-  return new ConfigManager(configPath, isClient);
-}
-
-export function createConfigManagerClient(
-  configPath: string,
-): ConfigManager {
-  return new ConfigManager(configPath, true);
 }

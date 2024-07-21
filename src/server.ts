@@ -10,11 +10,11 @@ import {
   PeerUpsert,
   PeerSessionRequest,
 } from "./types";
-import { ConfigManager, createConfigManager } from "./config-manager";
+import { ConfigManager } from "./config-manager";
 import { createMessage, safeParseJson } from "./utils";
 import { logger } from "./logger";
 import { PeerRepository } from "./peer-repository";
-import { serverMessageKeys } from "./constants";
+import { serverMessageTypes } from "./constants";
 import { SessionManager } from "./session-manager";
 import { SessionRepository } from "./session-repository";
 import { WsServer } from "./websocket-server";
@@ -28,10 +28,7 @@ export class SymmetryServer {
 
   constructor(configPath: string) {
     logger.info(`🔗 Initializing server using config file: ${configPath}`);
-    this._config = createConfigManager(configPath, false);
-    if (!this._config.isServerConfig()) {
-      throw new Error("Invalid configuration for server");
-    }
+    this._config = new ConfigManager(configPath);
     this._peerRepository = new PeerRepository();
     this._sessionRepository = new SessionRepository();
     this._sessionManager = new SessionManager(this._sessionRepository, 5);
@@ -81,13 +78,13 @@ export class SymmetryServer {
       if (!data) return;
       if (data.key) {
         switch (data?.key) {
-          case serverMessageKeys.join:
+          case serverMessageTypes.join:
             this.join(peer, data.data as PeerUpsert);
             break;
-          case serverMessageKeys.requestProvider:
+          case serverMessageTypes.requestProvider:
             this.handlePeerSession(peer, data.data as PeerSessionRequest);
             break;
-          case serverMessageKeys.verifySession:
+          case serverMessageTypes.verifySession:
             this.handlePeerSessionValidation(
               peer,
               data.data as {
@@ -109,7 +106,7 @@ export class SymmetryServer {
       });
       logger.info(`👋 Peer provider joined ${peer.rawStream.remoteHost}`);
       peer.write(
-        createMessage(serverMessageKeys.joinAck, {
+        createMessage(serverMessageTypes.joinAck, {
           status: "success",
           key: peerKey,
         })
@@ -130,7 +127,7 @@ export class SymmetryServer {
         providerPeer.discovery_key
       );
       peer.write(
-        createMessage(serverMessageKeys.providerDetails, {
+        createMessage(serverMessageTypes.providerDetails, {
           providerId: providerPeer.key,
           sessionToken,
         })
@@ -163,7 +160,7 @@ export class SymmetryServer {
       if (!providerPeer) return;
 
       peer.write(
-        createMessage(serverMessageKeys.sessionValid, {
+        createMessage(serverMessageTypes.sessionValid, {
           discoveryKey: providerPeer.discovery_key,
         })
       );
@@ -176,7 +173,7 @@ export class SymmetryServer {
         }`
       );
       peer.write(
-        createMessage(serverMessageKeys.sessionValid, {
+        createMessage(serverMessageTypes.sessionValid, {
           valid: false,
           error: "Error verifying session",
         })
