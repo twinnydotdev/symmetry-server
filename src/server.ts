@@ -101,8 +101,12 @@ export class SymmetryServer {
     const peerKey = peer.publicKey.toString("hex");
     try {
       await this._peerRepository.upsert({
-        ...message,
         key: peerKey,
+        discoveryKey: message.discoveryKey,
+        gpuMemory: message.gpuMemory,
+        modelName: message.modelName,
+        public: message.public,
+        serverKey: message.serverKey,
       });
       logger.info(`👋 Peer provider joined ${peer.rawStream.remoteHost}`);
       peer.write(

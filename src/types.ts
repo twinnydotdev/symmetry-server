@@ -181,12 +181,10 @@ export interface PeerWithSession extends Session {
 export interface PeerUpsert {
   key: string;
   discoveryKey: string;
-  config: {
-    gpuMemory?: number;
-    modelName?: string;
-    public?: boolean;
-    serverKey?: string;
-  };
+  gpuMemory?: number;
+  modelName?: string;
+  public?: boolean;
+  serverKey?: string;
 }
 
 export interface Message {

@@ -13,30 +13,34 @@ export class PeerRepository {
   }
 
   upsert(message: PeerUpsert) {
-    return new Promise((resolve, reject) => {
-      this.db.run(
-        `
-        INSERT OR REPLACE INTO peers (
-          key, discovery_key, gpu_memory, model_name, public, server_key, last_seen, online
-        ) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, TRUE)
-      `,
-        [
-          message.key,
-          message.discoveryKey,
-          message.config.gpuMemory,
-          message.config.modelName,
-          message.config.public,
-          message.config.serverKey,
-        ],
-        function (err) {
-          if (err) {
-            reject(err);
-          } else {
-            resolve(this.lastID);
+    try {
+      return new Promise((resolve, reject) => {
+        this.db.run(
+          `
+          INSERT OR REPLACE INTO peers (
+            key, discovery_key, gpu_memory, model_name, public, server_key, last_seen, online
+          ) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, TRUE)
+        `,
+          [
+            message.key,
+            message.discoveryKey,
+            message.gpuMemory,
+            message.modelName,
+            message.public,
+            message.serverKey,
+          ],
+          function (err) {
+            if (err) {
+              reject(err);
+            } else {
+              resolve(this.lastID);
+            }
           }
-        }
-      );
-    });
+        );
+      });
+    } catch (e) {
+      logger.error(`Error upserting peer ${message.key}: ${e}`);
+    }
   }
 
   getByDiscoveryKey(discoveryKey: string): Promise<Peer> {
