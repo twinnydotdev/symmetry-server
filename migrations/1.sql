@@ -9,6 +9,8 @@ CREATE TABLE IF NOT EXISTS peers (
     last_seen DATETIME,
     model_name TEXT,
     public BOOLEAN,
+    connections INTEGER,
+    max_connections INTEGER,
     online BOOLEAN,
     server_key TEXT,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP

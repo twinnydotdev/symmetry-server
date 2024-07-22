@@ -7,14 +7,15 @@ import path from "path";
 import {
   ClientMessage,
   Peer,
-  PeerUpsert,
   PeerSessionRequest,
+  ConnectionSizeUpdate,
+  PeerUpsert,
 } from "./types";
 import { ConfigManager } from "./config-manager";
 import { createMessage, safeParseJson } from "./utils";
 import { logger } from "./logger";
 import { PeerRepository } from "./peer-repository";
-import { serverMessageTypes } from "./constants";
+import { serverMessageKeys } from "./constants";
 import { SessionManager } from "./session-manager";
 import { SessionRepository } from "./session-repository";
 import { WsServer } from "./websocket-server";
@@ -53,11 +54,18 @@ export class SymmetryServer {
       this._peerRepository,
       swarm
     );
-    logger.info(`🔑 Discovery key: ${core.discoveryKey?.toString("hex")}`)
-    logger.info(`🔑 Drive key: ${core.key?.toString("hex")}`)
-    logger.info(chalk.green(`\u2713 Websocket server started: ws://localhost:${this._config.get("webSocketPort")}`));
-    logger.info(chalk.green(`\u2713 Symmetry server started, waiting for connections...`));
-
+    logger.info(`🔑 Discovery key: ${core.discoveryKey?.toString("hex")}`);
+    logger.info(`🔑 Drive key: ${core.key?.toString("hex")}`);
+    logger.info(
+      chalk.green(
+        `\u2713 Websocket server started: ws://localhost:${this._config.get(
+          "webSocketPort"
+        )}`
+      )
+    );
+    logger.info(
+      chalk.green(`\u2713 Symmetry server started, waiting for connections...`)
+    );
   }
 
   listeners(peer: Peer) {
@@ -78,13 +86,19 @@ export class SymmetryServer {
       if (!data) return;
       if (data.key) {
         switch (data?.key) {
-          case serverMessageTypes.join:
+          case serverMessageKeys.join:
             this.join(peer, data.data as PeerUpsert);
             break;
-          case serverMessageTypes.requestProvider:
+          case serverMessageKeys.conectionSize:
+            this.updateProviderConnections(
+              peer,
+              data.data as ConnectionSizeUpdate
+            );
+            break;
+          case serverMessageKeys.requestProvider:
             this.handlePeerSession(peer, data.data as PeerSessionRequest);
             break;
-          case serverMessageTypes.verifySession:
+          case serverMessageKeys.verifySession:
             this.handlePeerSessionValidation(
               peer,
               data.data as {
@@ -97,6 +111,11 @@ export class SymmetryServer {
     });
   }
 
+  async updateProviderConnections(peer: Peer, update: ConnectionSizeUpdate) {
+    const peerKey = peer.publicKey.toString("hex");
+    this._peerRepository.updateConnections(update.connections, peerKey);
+  }
+
   async join(peer: Peer, message: PeerUpsert) {
     const peerKey = peer.publicKey.toString("hex");
     try {
@@ -107,10 +126,11 @@ export class SymmetryServer {
         modelName: message.modelName,
         public: message.public,
         serverKey: message.serverKey,
+        maxConnections: message.maxConnections,
       });
       logger.info(`👋 Peer provider joined ${peer.rawStream.remoteHost}`);
       peer.write(
-        createMessage(serverMessageTypes.joinAck, {
+        createMessage(serverMessageKeys.joinAck, {
           status: "success",
           key: peerKey,
         })
@@ -123,6 +143,17 @@ export class SymmetryServer {
   }
 
   async handlePeerSession(peer: Peer, randomPeerRequest: PeerSessionRequest) {
+    const dbPeer = await this._peerRepository.getByKey(
+      peer.publicKey.toString("hex")
+    );
+
+    if (!dbPeer) return;
+
+    const currentConnections = dbPeer.connections || 0;
+    const maxConnections = dbPeer.max_connections;
+
+    if (currentConnections >= maxConnections) return;
+
     try {
       const providerPeer = await this._peerRepository.getPeer(
         randomPeerRequest
@@ -131,7 +162,7 @@ export class SymmetryServer {
         providerPeer.discovery_key
       );
       peer.write(
-        createMessage(serverMessageTypes.providerDetails, {
+        createMessage(serverMessageKeys.providerDetails, {
           providerId: providerPeer.key,
           sessionToken,
         })
@@ -164,7 +195,7 @@ export class SymmetryServer {
       if (!providerPeer) return;
 
       peer.write(
-        createMessage(serverMessageTypes.sessionValid, {
+        createMessage(serverMessageKeys.sessionValid, {
           discoveryKey: providerPeer.discovery_key,
         })
       );
@@ -177,7 +208,7 @@ export class SymmetryServer {
         }`
       );
       peer.write(
-        createMessage(serverMessageTypes.sessionValid, {
+        createMessage(serverMessageKeys.sessionValid, {
           valid: false,
           error: "Error verifying session",
         })

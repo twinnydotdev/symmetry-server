@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { serverMessageTypes } from "./constants";
+import { serverMessageKeys } from "./constants";
 
 export interface ServerConfig {
   path: string;
@@ -185,6 +185,23 @@ export interface PeerUpsert {
   modelName?: string;
   public?: boolean;
   serverKey?: string;
+  maxConnections: number;
+}
+
+export interface DbPeer {
+  key: string;
+  discovery_key: string;
+  gpu_memory?: number;
+  model_name?: string;
+  public?: boolean;
+  server_key?: string;
+  max_connections: number;
+  connections?: number;
+  created_at: Date;
+}
+
+export interface ConnectionSizeUpdate {
+  connections: number
 }
 
 export interface Message {
@@ -192,4 +209,4 @@ export interface Message {
   content: string | undefined;
 }
 
-export type ServerMessageKey = keyof typeof serverMessageTypes;
+export type ServerMessageKey = keyof typeof serverMessageKeys;

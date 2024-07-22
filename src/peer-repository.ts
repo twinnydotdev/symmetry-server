@@ -2,7 +2,7 @@ import { Database } from "sqlite3";
 import chalk from "chalk";
 
 import { database } from "./database";
-import { Peer, PeerSessionRequest, PeerUpsert } from "./types";
+import { DbPeer, Peer, PeerSessionRequest, PeerUpsert } from "./types";
 import { logger } from "./logger";
 
 export class PeerRepository {
@@ -18,8 +18,8 @@ export class PeerRepository {
         this.db.run(
           `
           INSERT OR REPLACE INTO peers (
-            key, discovery_key, gpu_memory, model_name, public, server_key, last_seen, online
-          ) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, TRUE)
+            key, discovery_key, gpu_memory, model_name, public, server_key, max_connections, last_seen, online
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, TRUE)
         `,
           [
             message.key,
@@ -28,6 +28,7 @@ export class PeerRepository {
             message.modelName,
             message.public,
             message.serverKey,
+            message.maxConnections,
           ],
           function (err) {
             if (err) {
@@ -43,12 +44,28 @@ export class PeerRepository {
     }
   }
 
-  getByDiscoveryKey(discoveryKey: string): Promise<Peer> {
+  getByKey(key: string): Promise<DbPeer> {
+    return new Promise((resolve, reject) => {
+      this.db.get(
+        "SELECT * FROM peers WHERE key = ?",
+        [key],
+        (err, row: DbPeer) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(row);
+          }
+        }
+      );
+    });
+  }
+
+  getByDiscoveryKey(discoveryKey: string): Promise<DbPeer> {
     return new Promise((resolve, reject) => {
       this.db.get(
         "SELECT * FROM peers WHERE discovery_key = ?",
         [discoveryKey],
-        (err, row: Peer) => {
+        (err, row: DbPeer) => {
           if (err) {
             reject(err);
           } else {
@@ -63,13 +80,38 @@ export class PeerRepository {
     return new Promise((resolve, reject) => {
       const { modelName } = randomPeerRequest;
       this.db.get(
-        `SELECT * FROM peers WHERE model_name = ? ORDER BY RANDOM() LIMIT 1`,
+        `SELECT * FROM peers WHERE model_name = ? AND online = TRUE ORDER BY RANDOM() LIMIT 1`,
         [modelName],
         (err, row: Peer) => {
           if (err) {
             reject(err);
           } else {
             resolve(row);
+          }
+        }
+      );
+    });
+  }
+
+  updateConnections(connections: number, peerKey: string) {
+    return new Promise((resolve, reject) => {
+      this.db.run(
+        "UPDATE peers SET connections = ? WHERE key = ?",
+        [connections, peerKey],
+        function (err) {
+          if (err) {
+            console.error(
+              chalk.red("❌ Error updating peer last seen in database:"),
+              err
+            );
+            reject(err);
+          } else {
+            if (this.changes > 0) {
+              logger.info(
+                chalk.yellow("🔗 Updated peer connections in database:"),
+              );
+            }
+            resolve(this.changes);
           }
         }
       );
