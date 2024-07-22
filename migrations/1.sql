@@ -11,6 +11,8 @@ CREATE TABLE IF NOT EXISTS peers (
     public BOOLEAN,
     connections INTEGER,
     max_connections INTEGER,
+    name TEXT,
+    website TEXT,
     online BOOLEAN,
     server_key TEXT,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP

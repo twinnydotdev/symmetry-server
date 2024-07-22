@@ -14,7 +14,7 @@ import {
 import { ConfigManager } from "./config-manager";
 import { createMessage, safeParseJson } from "./utils";
 import { logger } from "./logger";
-import { PeerRepository } from "./peer-repository";
+import { PeerRepository } from "./provider-repository";
 import { serverMessageKeys } from "./constants";
 import { SessionManager } from "./session-manager";
 import { SessionRepository } from "./session-repository";
@@ -127,6 +127,8 @@ export class SymmetryServer {
         public: message.public,
         serverKey: message.serverKey,
         maxConnections: message.maxConnections,
+        name: message.name,
+        website: message.website,
       });
       logger.info(`👋 Peer provider joined ${peer.rawStream.remoteHost}`);
       peer.write(
@@ -155,7 +157,7 @@ export class SymmetryServer {
     if (currentConnections >= maxConnections) return;
 
     try {
-      const providerPeer = await this._peerRepository.getPeer(
+      const providerPeer = await this._peerRepository.getRandom(
         randomPeerRequest
       );
       const sessionToken = await this._sessionManager.createSession(

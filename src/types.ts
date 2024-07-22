@@ -186,6 +186,8 @@ export interface PeerUpsert {
   public?: boolean;
   serverKey?: string;
   maxConnections: number;
+  name: string;
+  website: string;
 }
 
 export interface DbPeer {
@@ -198,10 +200,14 @@ export interface DbPeer {
   max_connections: number;
   connections?: number;
   created_at: Date;
+  name: string;
+  website: string;
+  online?: boolean;
+  updated_at: Date;
 }
 
 export interface ConnectionSizeUpdate {
-  connections: number
+  connections: number;
 }
 
 export interface Message {

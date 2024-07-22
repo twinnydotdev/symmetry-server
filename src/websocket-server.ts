@@ -1,7 +1,7 @@
 import { createServer } from "http";
 import Hyperswarm from "hyperswarm";
 import { WebSocket, WebSocketServer } from "ws";
-import { PeerRepository } from "./peer-repository";
+import { PeerRepository } from "./provider-repository";
 
 export class WsServer {
   private _wss: WebSocketServer | undefined;
