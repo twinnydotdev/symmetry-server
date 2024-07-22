@@ -1,26 +1,4 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-declare module "corestore" {
-  class Corestore {
-    constructor(path: string);
-    ready(): Promise<void>;
-    replicate(peer: any);
-    key: Buffer;
-  }
-
-  export = Corestore;
-}
-
-declare module "hyperdrive" {
-  import Corestore from "corestore";
-  class Hyperdrive {
-    constructor(store: Corestore);
-    ready(): Promise<void>;
-    discoveryKey: Buffer;
-    key: Buffer;
-  }
-  export = Hyperdrive;
-}
-
 declare module "hyperswarm" {
   import { EventEmitter } from "events";
 
@@ -55,19 +33,14 @@ declare module "hyperswarm" {
   }
 }
 
-declare module "localdrive" {
-  class Localdrive {
-    constructor(dir: string);
-    ready(): Promise<void>;
-    put(name: string, buf: Buffer): Promise<void>;
-    get(name: string): Promise<Buffer>;
-    del(name: string): Promise<void>;
-    list(prefix?: string): Promise<string[]>;
-  }
+declare module "hypercore-crypto" {
+  const hyperCoreCrypto: {
+    keyPair: () => { publicKey: Buffer; secretKey: Buffer }
+    discoveryKey: (publicKey: Buffer) => Buffer;
+  };
 
-  export = Localdrive;
+  export = hyperCoreCrypto;
 }
-
 declare module "b4a" {
   const b4a: {
     from(data: string | ArrayBuffer | Buffer, encoding?: string): Buffer;

@@ -23,7 +23,7 @@ export class ConfigManager {
   private validate(): void {
     const requiredFields: (keyof ServerConfig)[] = [
       "path",
-      "webSocketPort"
+      "wsPort"
     ];
 
     for (const field of requiredFields) {
@@ -34,9 +34,9 @@ export class ConfigManager {
       }
     }
 
-    if (typeof this.config.webSocketPort !== "number") {
+    if (typeof this.config.wsPort !== "number") {
       throw new Error(
-        `Invalid value for webSocketPort in client configuration: ${this.config.webSocketPort}`
+        `Invalid value for wsPort in client configuration: ${this.config.wsPort}`
       );
     }
   }

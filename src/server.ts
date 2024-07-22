@@ -1,8 +1,6 @@
 import chalk from "chalk";
-import Corestore from "corestore";
-import Hyperdrive from "hyperdrive";
 import Hyperswarm from "hyperswarm";
-import path from "path";
+import crypto from "hypercore-crypto";
 
 import {
   ClientMessage,
@@ -25,7 +23,6 @@ export class SymmetryServer {
   private _peerRepository: PeerRepository;
   private _sessionRepository: SessionRepository;
   private _sessionManager: SessionManager;
-  private _wsServer: WsServer | undefined;
 
   constructor(configPath: string) {
     logger.info(`🔗 Initializing server using config file: ${configPath}`);
@@ -36,35 +33,31 @@ export class SymmetryServer {
   }
 
   async init() {
-    const corePath = path.join(this._config.get("path"), "symmetry-core");
-    const store = new Corestore(corePath);
-    const core = new Hyperdrive(store);
     const swarm = new Hyperswarm();
-    await core.ready();
-    const discovery = swarm.join(core.discoveryKey, { server: true });
+    const discoveryKey = crypto.discoveryKey(Buffer.from(this._config.get("publicKey")))
+    const discovery = swarm.join(discoveryKey, { server: true });
     await discovery.flushed();
-
     swarm.on("connection", (peer: Peer) => {
       logger.info(`🔗 New Connection: ${peer.rawStream.remoteHost}`);
-      store.replicate(peer);
       this.listeners(peer);
     });
-    this._wsServer = new WsServer(
-      this._config.get("webSocketPort"),
+    new WsServer(
+      this._config.get("wsPort"),
       this._peerRepository,
       swarm
     );
-    logger.info(`🔑 Discovery key: ${core.discoveryKey?.toString("hex")}`);
-    logger.info(`🔑 Drive key: ${core.key?.toString("hex")}`);
     logger.info(
       chalk.green(
         `\u2713 Websocket server started: ws://localhost:${this._config.get(
-          "webSocketPort"
+          "wsPort"
         )}`
       )
     );
     logger.info(
       chalk.green(`\u2713 Symmetry server started, waiting for connections...`)
+    );
+    logger.info(
+      chalk.green(`🔑 Discovery key: ${discoveryKey.toString("hex")}`)
     );
   }
 

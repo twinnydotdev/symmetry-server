@@ -3,7 +3,8 @@ import { serverMessageKeys } from "./constants";
 
 export interface ServerConfig {
   path: string;
-  webSocketPort: number;
+  wsPort: number;
+  publicKey: string;
 }
 
 export interface ClientMessage<T = unknown> {
