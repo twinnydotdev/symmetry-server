@@ -31,6 +31,8 @@ export class PeerRepository {
             message.public,
             message.serverKey,
             message.maxConnections,
+            message.name,
+            message.website
           ],
           function (err) {
             if (err) {
