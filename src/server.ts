@@ -154,11 +154,7 @@ export class SymmetryServer {
     try {
       const privateKeyHex = this._config.get("privateKey");
       const { secretKey } = this.getKeys(privateKeyHex);
-      const challengeBuffer = Buffer.isBuffer(challengeRequest.challenge)
-        ? challengeRequest.challenge
-        : Buffer.from(challengeRequest.challenge);
-      
-      const signature = crypto.sign(challengeBuffer, secretKey);
+      const signature = crypto.sign(Buffer.from(challengeRequest.challenge), secretKey);
       peer.write(createMessage('challenge', { signature }));
     } catch (error) {
       console.error('Error in handleChallenge:', error);
