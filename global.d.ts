@@ -37,6 +37,7 @@ declare module "hypercore-crypto" {
   const hyperCoreCrypto: {
     keyPair: () => { publicKey: Buffer; secretKey: Buffer }
     discoveryKey: (publicKey: Buffer) => Buffer;
+    sign(message, secretKey) : Buffer;
   };
 
   export = hyperCoreCrypto;

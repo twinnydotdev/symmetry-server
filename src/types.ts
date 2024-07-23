@@ -5,6 +5,7 @@ export interface ServerConfig {
   path: string;
   wsPort: number;
   publicKey: string;
+  privateKey: string;
 }
 
 export interface ClientMessage<T = unknown> {
@@ -171,6 +172,10 @@ export interface Session {
 export interface PeerSessionRequest {
   modelName: string;
   preferredProviderId?: string;
+}
+
+export interface ChallengeRequest extends Session {
+  challenge: Buffer;
 }
 
 export interface PeerWithSession extends Session {

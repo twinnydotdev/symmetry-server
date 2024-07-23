@@ -8,6 +8,7 @@ import {
   PeerSessionRequest,
   ConnectionSizeUpdate,
   PeerUpsert,
+  ChallengeRequest,
 } from "./types";
 import { ConfigManager } from "./config-manager";
 import { createMessage, safeParseJson } from "./utils";
@@ -34,31 +35,27 @@ export class SymmetryServer {
 
   async init() {
     const swarm = new Hyperswarm();
-    const discoveryKey = crypto.discoveryKey(Buffer.from(this._config.get("publicKey")))
+    const discoveryKey = crypto.discoveryKey(
+      Buffer.from(this._config.get("publicKey"))
+    );
     const discovery = swarm.join(discoveryKey, { server: true });
     await discovery.flushed();
     swarm.on("connection", (peer: Peer) => {
       logger.info(`🔗 New Connection: ${peer.rawStream.remoteHost}`);
       this.listeners(peer);
     });
-    new WsServer(
-      this._config.get("wsPort"),
-      this._peerRepository,
-      swarm
-    );
+    new WsServer(this._config.get("wsPort"), this._peerRepository, swarm);
     logger.info(
       chalk.green(
-        `\u2713 Websocket server started: ws://localhost:${this._config.get(
+        `\u2713  Websocket server started: ws://localhost:${this._config.get(
           "wsPort"
         )}`
       )
     );
     logger.info(
-      chalk.green(`\u2713 Symmetry server started, waiting for connections...`)
+      chalk.green(`\u2713  Symmetry server started, waiting for connections...`)
     );
-    logger.info(
-      chalk.green(`🔑 Discovery key: ${discoveryKey.toString("hex")}`)
-    );
+    logger.info(chalk.green(`🔑 Public key: ${this._config.get("publicKey")}`));
   }
 
   listeners(peer: Peer) {
@@ -81,6 +78,9 @@ export class SymmetryServer {
         switch (data?.key) {
           case serverMessageKeys.join:
             this.join(peer, data.data as PeerUpsert);
+            break;
+          case serverMessageKeys.challenge:
+            this.handleChallenge(peer, data.data as ChallengeRequest);
             break;
           case serverMessageKeys.conectionSize:
             this.updateProviderConnections(
@@ -134,6 +134,34 @@ export class SymmetryServer {
       let errorMessage = "";
       if (error instanceof Error) errorMessage = error.message;
       logger.error(`🚨 ${errorMessage}`);
+    }
+  }
+
+  getKeys(privateKeyHex: string) {
+    const fullKey = Buffer.from(privateKeyHex, 'hex');
+    if (fullKey.length !== 64) {
+      throw new Error('Expected a 64-byte private key');
+    }
+    const secretKey = fullKey;
+    const publicKey = fullKey.subarray(32); // Public key is last 32 bytes of secret key
+    return { secretKey, publicKey };
+  }
+
+  handleChallenge(
+    peer: Peer,
+    challengeRequest: { challenge: Buffer | string }
+  ) {
+    try {
+      const privateKeyHex = this._config.get("privateKey");
+      const { secretKey } = this.getKeys(privateKeyHex);
+      const challengeBuffer = Buffer.isBuffer(challengeRequest.challenge)
+        ? challengeRequest.challenge
+        : Buffer.from(challengeRequest.challenge);
+      
+      const signature = crypto.sign(challengeBuffer, secretKey);
+      peer.write(createMessage('challenge', { signature }));
+    } catch (error) {
+      console.error('Error in handleChallenge:', error);
     }
   }
 

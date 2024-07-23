@@ -23,7 +23,9 @@ export class ConfigManager {
   private validate(): void {
     const requiredFields: (keyof ServerConfig)[] = [
       "path",
-      "wsPort"
+      "wsPort",
+      "publicKey",
+      "privateKey"
     ];
 
     for (const field of requiredFields) {
