@@ -143,7 +143,7 @@ export class SymmetryServer {
       throw new Error('Expected a 64-byte private key');
     }
     const secretKey = fullKey;
-    const publicKey = fullKey.subarray(32); // Public key is last 32 bytes of secret key
+    const publicKey = fullKey.subarray(32);
     return { secretKey, publicKey };
   }
 
