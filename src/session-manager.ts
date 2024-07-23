@@ -67,7 +67,6 @@ export class SessionManager {
   async deleteSession(sessionId: string): Promise<boolean> {
     const result = await this.sessionRepository.delete(sessionId);
     if (result) {
-      // cross bin emoji  
       logger.info(`🗑 Session deleted: ${sessionId}`);
     } else {
       logger.warning(`🚨 Failed to delete session: ${sessionId}`);
