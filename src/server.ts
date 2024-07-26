@@ -73,8 +73,7 @@ export class SymmetryServer {
 
     peer.on("data", (message) => {
       const data = safeParseJson<ClientMessage>(message.toString());
-      if (!data) return;
-      if (data.key) {
+      if (data && data.key) {
         switch (data?.key) {
           case serverMessageKeys.join:
             this.join(peer, data.data as PeerUpsert);
@@ -177,6 +176,12 @@ export class SymmetryServer {
       const providerPeer = await this._peerRepository.getRandom(
         randomPeerRequest
       );
+
+      if (!providerPeer) {
+        logger.warning(`🚨 No providers found for ${peer.publicKey.toString("hex")}`);
+        return;
+      }
+
       const sessionToken = await this._sessionManager.createSession(
         providerPeer.discovery_key
       );

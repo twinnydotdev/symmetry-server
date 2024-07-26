@@ -84,7 +84,7 @@ export class PeerRepository {
     return new Promise((resolve, reject) => {
       const { modelName } = request;
       this.db.get(
-        `SELECT * FROM peers WHERE model_name = ? AND online = TRUE ORDER BY RANDOM() LIMIT 1`,
+        `SELECT * FROM peers WHERE model_name = ? ORDER BY RANDOM() LIMIT 1`,
         [modelName],
         (err, row: Peer) => {
           if (err) {
