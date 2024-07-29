@@ -32,12 +32,12 @@ export class WsServer {
   };
 
   private async sendStats(ws: WebSocket) {
-    const stats = await this.getStats(this._swarm);
+    const stats = await this.getStats();
     ws.send(JSON.stringify(stats));
   }
 
   async broadcastStats() {
-    const stats = await this.getStats(this._swarm);
+    const stats = await this.getStats();
     this._wss?.clients.forEach((client) => {
       if (client.readyState === WebSocket.OPEN) {
         client.send(JSON.stringify(stats));
@@ -45,15 +45,13 @@ export class WsServer {
     });
   }
 
-  private async getStats(swarm: Hyperswarm) {
+  private async getStats() {
     const activePeers = await this._peerRepository.getActivePeerCount();
     const activeModels = await this._peerRepository.getActiveModelCount();
-    const swarmConnections = swarm.connections.size;
 
     return {
       activePeers,
       activeModels,
-      swarmConnections,
     };
   }
 }
