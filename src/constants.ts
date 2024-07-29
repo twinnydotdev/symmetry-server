@@ -1,9 +1,8 @@
 export const serverMessageKeys = {
+  challenge: "challenge",
   conectionSize: "conectionSize",
-  heartbeat: "heartbeat",
   inference: "inference",
   join: "join",
-  challenge: "challenge",
   joinAck: "joinAck",
   leave: "leave",
   newConversation: "newConversation",

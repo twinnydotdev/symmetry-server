@@ -8,7 +8,7 @@ export function safeParseJson<T>(data: string): T | undefined {
   }
 }
 
-export function createMessage<T>(key: ServerMessageKey, data: T): string {
+export function createMessage<T>(key: ServerMessageKey, data?: T): string {
   if (data instanceof Buffer) {
     return JSON.stringify({ key, data: data.toString('base64') });
   }

@@ -76,39 +76,35 @@ export class SymmetryServer {
       if (data && data.key) {
         switch (data?.key) {
           case serverMessageKeys.join:
-            this.join(peer, data.data as PeerUpsert);
-            break;
+            return this.handleJoin(peer, data.data as PeerUpsert);
           case serverMessageKeys.challenge:
-            this.handleChallenge(peer, data.data as ChallengeRequest);
-            break;
+            return this.handleChallenge(peer, data.data as ChallengeRequest);
           case serverMessageKeys.conectionSize:
-            this.updateProviderConnections(
+            return this.handleProviderConnections(
               peer,
               data.data as ConnectionSizeUpdate
             );
-            break;
           case serverMessageKeys.requestProvider:
-            this.handlePeerSession(peer, data.data as PeerSessionRequest);
-            break;
-          case serverMessageKeys.verifySession:
-            this.handlePeerSessionValidation(
+            return this.handlePeerSession(
               peer,
-              data.data as {
-                sessionToken: string;
-              }
+              data.data as PeerSessionRequest
             );
-            break;
+          case serverMessageKeys.verifySession:
+            return this.handleSessionValidation(
+              peer,
+              data.data as string
+            );
         }
       }
     });
   }
 
-  async updateProviderConnections(peer: Peer, update: ConnectionSizeUpdate) {
+  async handleProviderConnections(peer: Peer, update: ConnectionSizeUpdate) {
     const peerKey = peer.publicKey.toString("hex");
     this._peerRepository.updateConnections(update.connections, peerKey);
   }
 
-  async join(peer: Peer, message: PeerUpsert) {
+  async handleJoin(peer: Peer, message: PeerUpsert) {
     const peerKey = peer.publicKey.toString("hex");
     try {
       await this._peerRepository.upsert({
@@ -137,9 +133,9 @@ export class SymmetryServer {
   }
 
   getKeys(privateKeyHex: string) {
-    const fullKey = Buffer.from(privateKeyHex, 'hex');
+    const fullKey = Buffer.from(privateKeyHex, "hex");
     if (fullKey.length !== 64) {
-      throw new Error('Expected a 64-byte private key');
+      throw new Error("Expected a 64-byte private key");
     }
     const secretKey = fullKey;
     const publicKey = fullKey.subarray(32);
@@ -153,10 +149,13 @@ export class SymmetryServer {
     try {
       const privateKeyHex = this._config.get("privateKey");
       const { secretKey } = this.getKeys(privateKeyHex);
-      const signature = crypto.sign(Buffer.from(challengeRequest.challenge), secretKey);
-      peer.write(createMessage('challenge', { signature }));
+      const signature = crypto.sign(
+        Buffer.from(challengeRequest.challenge),
+        secretKey
+      );
+      peer.write(createMessage("challenge", { signature }));
     } catch (error) {
-      console.error('Error in handleChallenge:', error);
+      console.error("Error in handleChallenge:", error);
     }
   }
 
@@ -178,7 +177,9 @@ export class SymmetryServer {
       );
 
       if (!providerPeer) {
-        logger.warning(`🚨 No providers found for ${peer.publicKey.toString("hex")}`);
+        logger.warning(
+          `🚨 No providers found for ${peer.publicKey.toString("hex")}`
+        );
         return;
       }
 
@@ -198,16 +199,14 @@ export class SymmetryServer {
     }
   }
 
-  async handlePeerSessionValidation(
+  async handleSessionValidation(
     peer: Peer,
-    message: {
-      sessionToken: string;
-    }
+    sessionToken: string
   ) {
-    if (!message.sessionToken) return;
+    if (!sessionToken) return;
     try {
       const providerDiscoveryKey = await this._sessionManager.verifySession(
-        message.sessionToken
+        sessionToken
       );
 
       if (!providerDiscoveryKey) return;
@@ -221,10 +220,11 @@ export class SymmetryServer {
       peer.write(
         createMessage(serverMessageKeys.sessionValid, {
           discoveryKey: providerPeer.discovery_key,
+          modelName: providerPeer.model_name,
         })
       );
 
-      await this._sessionManager.extendSession(message.sessionToken);
+      await this._sessionManager.extendSession(sessionToken);
     } catch (error) {
       logger.error(
         `Session verification error: ${
