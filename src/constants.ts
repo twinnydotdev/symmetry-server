@@ -1,4 +1,4 @@
-export const MAX_RANDOM_PEER_REQUEST_ATTEMPTS = 10
+export const MAX_RANDOM_PEER_REQUEST_ATTEMPTS = 5
 
 export const serverMessageKeys = {
   challenge: "challenge",

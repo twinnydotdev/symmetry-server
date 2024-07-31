@@ -61,16 +61,6 @@ export class SymmetryServer {
   listeners(peer: Peer) {
     peer.on("error", (err) => err);
 
-    peer.on("close", () => {
-      const peerKey = peer.remotePublicKey.toString("hex");
-      this._peerRepository.updateLastSeen(peerKey);
-      logger.info(
-        `🔗 Connection Closed: Peer ${peerKey.slice(0, 6)}...${peerKey.slice(
-          -6
-        )}`
-      );
-    });
-
     peer.on("data", (message) => {
       const data = safeParseJson<ClientMessage>(message.toString());
       if (data && data.key) {
@@ -169,7 +159,7 @@ export class SymmetryServer {
   async handleRequestProvider(peer: Peer, randomPeerRequest: PeerSessionRequest, attempts = 0) {
     try {
 
-    if (attempts > MAX_RANDOM_PEER_REQUEST_ATTEMPTS) return
+      if (attempts > MAX_RANDOM_PEER_REQUEST_ATTEMPTS) return
 
       const providerPeer = await this.getRandomPeer(randomPeerRequest);
       
