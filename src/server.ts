@@ -14,7 +14,10 @@ import { ConfigManager } from "./config-manager";
 import { createMessage, safeParseJson } from "./utils";
 import { logger } from "./logger";
 import { PeerRepository } from "./provider-repository";
-import { MAX_RANDOM_PEER_REQUEST_ATTEMPTS, serverMessageKeys } from "./constants";
+import {
+  MAX_RANDOM_PEER_REQUEST_ATTEMPTS,
+  serverMessageKeys,
+} from "./constants";
 import { SessionManager } from "./session-manager";
 import { SessionRepository } from "./session-repository";
 import { WsServer } from "./websocket-server";
@@ -24,6 +27,9 @@ export class SymmetryServer {
   private _peerRepository: PeerRepository;
   private _sessionRepository: SessionRepository;
   private _sessionManager: SessionManager;
+  private _pongTimeouts: Map<string, NodeJS.Timeout> = new Map();
+  private _missedPongs: Map<string, number> = new Map();
+  private _heartbeatIntervals: Map<string, NodeJS.Timeout> = new Map();
 
   constructor(configPath: string) {
     logger.info(`🔗 Initializing server using config file: ${configPath}`);
@@ -43,6 +49,7 @@ export class SymmetryServer {
     swarm.on("connection", (peer: Peer) => {
       logger.info(`🔗 New Connection: ${peer.rawStream.remoteHost}`);
       this.listeners(peer);
+      this.startHeartbeat(peer);
     });
     new WsServer(this._config.get("wsPort"), this._peerRepository, swarm);
     logger.info(
@@ -58,8 +65,67 @@ export class SymmetryServer {
     logger.info(chalk.green(`🔑 Public key: ${this._config.get("publicKey")}`));
   }
 
+  stopHeartbeat(peerKey: string) {
+    const heartbeatInterval = this._heartbeatIntervals.get(peerKey);
+    if (heartbeatInterval) {
+      clearInterval(heartbeatInterval);
+      this._heartbeatIntervals.delete(peerKey);
+    }
+    this.clearPongTimeout(peerKey);
+    this._missedPongs.delete(peerKey);
+  }
+
+  startHeartbeat(peer: Peer) {
+    const peerKey = peer.remotePublicKey.toString("hex");
+    const pingInterval = 3000;
+    const pongTimeout = 5000;
+    const maxMissedPongs = 3;
+
+    const heartbeatInterval = setInterval(() => {
+      peer.write(createMessage(serverMessageKeys.ping));
+      
+      const timeout = setTimeout(() => {
+        this.handleMissingPong(peerKey, maxMissedPongs);
+      }, pongTimeout);
+
+      this._pongTimeouts.set(peerKey, timeout);
+    }, pingInterval);
+
+    this._heartbeatIntervals.set(peerKey, heartbeatInterval);
+  }
+
+  private handlePongReceived(peerKey: string) {
+    logger.info(`💚 Pong received from ${peerKey}`);
+    this.clearPongTimeout(peerKey);
+  }
+
+  private async handleMissingPong(peerKey: string, maxMissedPongs: number) {
+    const missedPongs = (this._missedPongs.get(peerKey) || 0) + 1;
+    this._missedPongs.set(peerKey, missedPongs);
+
+    logger.warning(`🚨 Pong not received from ${peerKey}. Missed pongs: ${missedPongs}`);
+
+    if (missedPongs >= maxMissedPongs) {
+      logger.warning(`🚨 Peer ${peerKey} has missed ${maxMissedPongs} pongs. Marking as inactive.`);
+      await this._peerRepository.setPeerOffline(peerKey);
+      this.stopHeartbeat(peerKey);
+    }
+  }
+
+  private clearPongTimeout(peerKey: string) {
+    const timeout = this._pongTimeouts.get(peerKey);
+    if (timeout) {
+      clearTimeout(timeout);
+      this._pongTimeouts.delete(peerKey);
+    }
+  }
+
   listeners(peer: Peer) {
     peer.on("error", (err) => err);
+
+    peer.on("close", () => {
+      logger.info(`🔗 Connection closed: ${peer.rawStream.remoteHost}`);
+    });
 
     peer.on("data", (message) => {
       const data = safeParseJson<ClientMessage>(message.toString());
@@ -79,12 +145,18 @@ export class SymmetryServer {
               peer,
               data.data as PeerSessionRequest
             );
+          case serverMessageKeys.pong:
+            this.handlePongReceived(peer.remotePublicKey.toString("hex"));
+            break;
           case serverMessageKeys.verifySession:
-            return this.handleSessionValidation(
-              peer,
-              data.data as string
-            );
+            return this.handleSessionValidation(peer, data.data as string);
         }
+      }
+    });
+
+    process.on("uncaughtException", (err) => {
+      if (err.message === "connection reset by peer") {
+        console.log(chalk.red(`🔌 Connection reset by peer`));
       }
     });
   }
@@ -149,23 +221,26 @@ export class SymmetryServer {
     }
   }
 
-  async getRandomPeer (randomPeerRequest: PeerSessionRequest) {
+  async getRandomPeer(randomPeerRequest: PeerSessionRequest) {
     const providerPeer = await this._peerRepository.getRandom(
       randomPeerRequest
     );
     return providerPeer;
   }
 
-  async handleRequestProvider(peer: Peer, randomPeerRequest: PeerSessionRequest, attempts = 0) {
+  async handleRequestProvider(
+    peer: Peer,
+    randomPeerRequest: PeerSessionRequest,
+    attempts = 0
+  ) {
     try {
-
-      if (attempts > MAX_RANDOM_PEER_REQUEST_ATTEMPTS) return
+      if (attempts > MAX_RANDOM_PEER_REQUEST_ATTEMPTS) return;
 
       const providerPeer = await this.getRandomPeer(randomPeerRequest);
-      
+
       if (!providerPeer) {
-        this.handleRequestProvider(peer, randomPeerRequest, attempts + 1)
-        return
+        this.handleRequestProvider(peer, randomPeerRequest, attempts + 1);
+        return;
       }
 
       const currentConnections = providerPeer.connections || 0;
@@ -196,10 +271,7 @@ export class SymmetryServer {
     }
   }
 
-  async handleSessionValidation(
-    peer: Peer,
-    sessionToken: string
-  ) {
+  async handleSessionValidation(peer: Peer, sessionToken: string) {
     if (!sessionToken) return;
     try {
       const providerDiscoveryKey = await this._sessionManager.verifySession(

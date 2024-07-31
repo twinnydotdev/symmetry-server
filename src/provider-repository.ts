@@ -12,6 +12,18 @@ export class PeerRepository {
     this.db = database;
   }
 
+  async setPeerOffline(peerKey: string) {
+    try {
+      this.db.run(
+        'UPDATE peers SET online = FALSE, updated_at = NOW() WHERE key = ?',
+        [peerKey]
+      );
+      logger.info(`Updated status for peer ${peerKey}}`);
+    } catch (error) {
+      logger.error(`Failed to update status for peer ${peerKey}: ${error}`);
+    }
+  }
+
   upsert(message: PeerUpsert) {
     try {
       return new Promise((resolve, reject) => {
@@ -178,7 +190,7 @@ export class PeerRepository {
 
   getAllPeers(): Promise<Peer[]> {
     return new Promise((resolve, reject) => {
-      this.db.all("SELECT id, last_seen, max_connections, connections, model_name, name, online, public FROM peers", (err, rows: Peer[]) => {
+      this.db.all("SELECT id, last_seen, max_connections, connections, model_name, name, online, public FROM peers WHERE online = TRUE", (err, rows: Peer[]) => {
         if (err) {
           reject(err);
         } else {
