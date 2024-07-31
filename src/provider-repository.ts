@@ -110,11 +110,6 @@ export class PeerRepository {
             );
             reject(err);
           } else {
-            if (this.changes > 0) {
-              logger.info(
-                chalk.yellow("🔗 Updated peer connections in database:"),
-              );
-            }
             resolve(this.changes);
           }
         }
