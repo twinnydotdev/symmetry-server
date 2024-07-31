@@ -14,7 +14,7 @@ import { ConfigManager } from "./config-manager";
 import { createMessage, safeParseJson } from "./utils";
 import { logger } from "./logger";
 import { PeerRepository } from "./provider-repository";
-import { serverMessageKeys } from "./constants";
+import { MAX_RANDOM_PEER_REQUEST_ATTEMPTS, serverMessageKeys } from "./constants";
 import { SessionManager } from "./session-manager";
 import { SessionRepository } from "./session-repository";
 import { WsServer } from "./websocket-server";
@@ -62,7 +62,7 @@ export class SymmetryServer {
     peer.on("error", (err) => err);
 
     peer.on("close", () => {
-      const peerKey = peer.publicKey.toString("hex");
+      const peerKey = peer.remotePublicKey.toString("hex");
       this._peerRepository.updateLastSeen(peerKey);
       logger.info(
         `🔗 Connection Closed: Peer ${peerKey.slice(0, 6)}...${peerKey.slice(
@@ -85,7 +85,7 @@ export class SymmetryServer {
               data.data as ConnectionSizeUpdate
             );
           case serverMessageKeys.requestProvider:
-            return this.handlePeerSession(
+            return this.handleRequestProvider(
               peer,
               data.data as PeerSessionRequest
             );
@@ -105,7 +105,7 @@ export class SymmetryServer {
   }
 
   async handleJoin(peer: Peer, message: PeerUpsert) {
-    const peerKey = peer.publicKey.toString("hex");
+    const peerKey = peer.remotePublicKey.toString("hex");
     try {
       await this._peerRepository.upsert({
         key: peerKey,
@@ -159,22 +159,29 @@ export class SymmetryServer {
     }
   }
 
-  async handlePeerSession(peer: Peer, randomPeerRequest: PeerSessionRequest) {
-    const dbPeer = await this._peerRepository.getByKey(
-      peer.publicKey.toString("hex")
+  async getRandomPeer (randomPeerRequest: PeerSessionRequest) {
+    const providerPeer = await this._peerRepository.getRandom(
+      randomPeerRequest
     );
+    return providerPeer;
+  }
 
-    if (!dbPeer) return;
-
-    const currentConnections = dbPeer.connections || 0;
-    const maxConnections = dbPeer.max_connections;
-
-    if (currentConnections >= maxConnections) return;
-
+  async handleRequestProvider(peer: Peer, randomPeerRequest: PeerSessionRequest, attempts = 0) {
     try {
-      const providerPeer = await this._peerRepository.getRandom(
-        randomPeerRequest
-      );
+
+    if (attempts > MAX_RANDOM_PEER_REQUEST_ATTEMPTS) return
+
+      const providerPeer = await this.getRandomPeer(randomPeerRequest);
+      
+      if (!providerPeer) {
+        this.handleRequestProvider(peer, randomPeerRequest, attempts + 1)
+        return
+      }
+
+      const currentConnections = providerPeer.connections || 0;
+      const maxConnections = providerPeer.max_connections;
+
+      if (currentConnections >= maxConnections) return;
 
       if (!providerPeer) {
         logger.warning(

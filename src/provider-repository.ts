@@ -80,7 +80,7 @@ export class PeerRepository {
     });
   }
 
-  getRandom(request: ProviderSessionRequest): Promise<Peer> {
+  getRandom(request: ProviderSessionRequest): Promise<DbPeer> {
     return new Promise((resolve, reject) => {
       const { modelName } = request;
       this.db.get(
