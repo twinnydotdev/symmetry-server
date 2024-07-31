@@ -86,7 +86,7 @@ export class PeerRepository {
       this.db.get(
         `SELECT * FROM peers WHERE model_name = ? AND online = TRUE ORDER BY RANDOM() LIMIT 1`,
         [modelName],
-        (err, row: Peer) => {
+        (err, row: DbPeer) => {
           if (err) {
             reject(err);
           } else {
@@ -178,6 +178,18 @@ export class PeerRepository {
           }
         }
       );
+    });
+  }
+
+  getAllPeers(): Promise<Peer[]> {
+    return new Promise((resolve, reject) => {
+      this.db.all("SELECT id, last_seen, max_connections, connections, model_name, name, online, public FROM peers", (err, rows: Peer[]) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(rows);
+        }
+      });
     });
   }
 

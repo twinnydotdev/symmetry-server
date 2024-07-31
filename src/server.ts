@@ -100,7 +100,7 @@ export class SymmetryServer {
   }
 
   async handleProviderConnections(peer: Peer, update: ConnectionSizeUpdate) {
-    const peerKey = peer.publicKey.toString("hex");
+    const peerKey = peer.remotePublicKey.toString("hex");
     this._peerRepository.updateConnections(update.connections, peerKey);
   }
 

@@ -48,10 +48,12 @@ export class WsServer {
   private async getStats() {
     const activePeers = await this._peerRepository.getActivePeerCount();
     const activeModels = await this._peerRepository.getActiveModelCount();
+    const allPeers = await this._peerRepository.getAllPeers();
 
     return {
       activePeers,
       activeModels,
+      allPeers,
     };
   }
 }
