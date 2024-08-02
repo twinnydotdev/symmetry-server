@@ -187,7 +187,7 @@ export interface PeerWithSession extends Session {
 export interface PeerUpsert {
   key: string;
   discoveryKey: string;
-  gpuMemory?: number;
+  dataCollectionEnabled: boolean;
   modelName?: string;
   public?: boolean;
   serverKey?: string;
@@ -199,10 +199,10 @@ export interface PeerUpsert {
 export interface DbPeer {
   key: string;
   discovery_key: string;
-  gpu_memory?: number;
   model_name?: string;
   public?: boolean;
   server_key?: string;
+  data_collection_enabled: boolean;
   max_connections: number;
   connections?: number;
   created_at: Date;

@@ -30,7 +30,7 @@ export class PeerRepository {
         this.db.run(
           `
           INSERT OR REPLACE INTO peers (
-            key, discovery_key, gpu_memory, model_name, public, 
+            key, discovery_key, data_collection_enabled, model_name, public, 
             server_key, max_connections, name, website,
             last_seen, online
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, TRUE)
@@ -38,7 +38,7 @@ export class PeerRepository {
           [
             message.key,
             message.discoveryKey,
-            message.gpuMemory,
+            message.dataCollectionEnabled,
             message.modelName,
             message.public,
             message.serverKey,

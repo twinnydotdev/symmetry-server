@@ -95,7 +95,6 @@ export class SymmetryServer {
   }
 
   private handlePongReceived(peerKey: string) {
-    logger.info(`💚 Pong received from ${peerKey}`);
     this.clearPongTimeout(peerKey);
   }
 
@@ -103,10 +102,7 @@ export class SymmetryServer {
     const missedPongs = (this._missedPongs.get(peerKey) || 0) + 1;
     this._missedPongs.set(peerKey, missedPongs);
 
-    logger.warning(`🚨 Pong not received from ${peerKey}. Missed pongs: ${missedPongs}`);
-
     if (missedPongs >= maxMissedPongs) {
-      logger.warning(`🚨 Peer ${peerKey} has missed ${maxMissedPongs} pongs. Marking as inactive.`);
       await this._peerRepository.setPeerOffline(peerKey);
       this.stopHeartbeat(peerKey);
     }
@@ -172,7 +168,7 @@ export class SymmetryServer {
       await this._peerRepository.upsert({
         key: peerKey,
         discoveryKey: message.discoveryKey,
-        gpuMemory: message.gpuMemory,
+        dataCollectionEnabled: message.dataCollectionEnabled,
         modelName: message.modelName,
         public: message.public,
         serverKey: message.serverKey,
