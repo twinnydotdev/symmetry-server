@@ -211,6 +211,7 @@ export interface DbPeer {
   website: string;
   online?: boolean;
   updated_at: Date;
+  provider: string;
 }
 
 export interface ConnectionSizeUpdate {
