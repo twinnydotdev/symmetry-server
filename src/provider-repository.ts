@@ -35,7 +35,7 @@ export class PeerRepository {
             key, discovery_key, data_collection_enabled, model_name, public, 
             server_key, max_connections, name, website, provider,
             last_seen, online
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, TRUE)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, TRUE)
         `,
           [
             message.key,
