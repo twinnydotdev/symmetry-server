@@ -2,7 +2,12 @@ import { Database } from "sqlite3";
 import chalk from "chalk";
 
 import { database } from "./database";
-import { DbPeer, Peer, PeerSessionRequest as ProviderSessionRequest, PeerUpsert } from "./types";
+import {
+  DbPeer,
+  Peer,
+  PeerSessionRequest as ProviderSessionRequest,
+  PeerUpsert,
+} from "./types";
 import { logger } from "./logger";
 
 export class PeerRepository {
@@ -14,10 +19,7 @@ export class PeerRepository {
 
   async setPeerOffline(peerKey: string) {
     try {
-      this.db.run(
-        'UPDATE peers SET online = FALSE WHERE key = ?',
-        [peerKey]
-      );
+      this.db.run("UPDATE peers SET online = FALSE WHERE key = ?", [peerKey]);
       logger.info(`Updated status for peer ${peerKey}}`);
     } catch (error) {
       logger.error(`Failed to update status for peer ${peerKey}: ${error}`);
@@ -31,7 +33,7 @@ export class PeerRepository {
           `
           INSERT OR REPLACE INTO peers (
             key, discovery_key, data_collection_enabled, model_name, public, 
-            server_key, max_connections, name, website,
+            server_key, max_connections, name, website, provider,
             last_seen, online
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, TRUE)
         `,
@@ -44,7 +46,8 @@ export class PeerRepository {
             message.serverKey,
             message.maxConnections,
             message.name,
-            message.website
+            message.website,
+            message.provider,
           ],
           function (err) {
             if (err) {
@@ -143,13 +146,9 @@ export class PeerRepository {
             reject(err);
           } else {
             if (this.changes > 0) {
-              logger.info(
-                chalk.yellow("🕒 Peer disconnected"),
-              );
+              logger.info(chalk.yellow("🕒 Peer disconnected"));
             } else {
-              logger.info(
-                chalk.yellow("⚠️ Peer not found in database"),
-              );
+              logger.info(chalk.yellow("⚠️ Peer not found in database"));
             }
             resolve(this.changes);
           }
@@ -190,13 +189,16 @@ export class PeerRepository {
 
   getAllPeers(): Promise<Peer[]> {
     return new Promise((resolve, reject) => {
-      this.db.all("SELECT id, last_seen, data_collection_enabled, max_connections, connections, model_name, name, online, public FROM peers WHERE online = TRUE", (err, rows: Peer[]) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(rows);
+      this.db.all(
+        "SELECT id, last_seen, data_collection_enabled, max_connections, connections, model_name, name, online, public, provider FROM peers WHERE online = TRUE",
+        (err, rows: Peer[]) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(rows);
+          }
         }
-      });
+      );
     });
   }
 

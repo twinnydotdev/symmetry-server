@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS peers (
     connections INTEGER,
     max_connections INTEGER,
     data_collection_enabled BOOLEAN,
+    provider TEXT,
     name TEXT,
     website TEXT,
     online BOOLEAN,
