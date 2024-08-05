@@ -284,10 +284,7 @@ export class SymmetryServer {
       if (!providerPeer) return;
 
       peer.write(
-        createMessage(serverMessageKeys.sessionValid, {
-          discoveryKey: providerPeer.discovery_key,
-          modelName: providerPeer.model_name,
-        })
+        createMessage(serverMessageKeys.sessionValid, providerPeer)
       );
 
       await this._sessionManager.extendSession(sessionToken);
@@ -298,10 +295,7 @@ export class SymmetryServer {
         }`
       );
       peer.write(
-        createMessage(serverMessageKeys.sessionValid, {
-          valid: false,
-          error: "Error verifying session",
-        })
+        createMessage(serverMessageKeys.sessionValid, {})
       );
     }
   }
