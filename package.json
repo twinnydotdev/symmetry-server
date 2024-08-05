@@ -5,7 +5,7 @@
   "main": "lib/symmetry.js",
   "bin": "lib/symmetry.js",
   "author": "rjmacarthy",
-  "license": "ISC",
+  "license": "MIT",
   "scripts": {
     "test": "jest",
     "build": "tsc",
