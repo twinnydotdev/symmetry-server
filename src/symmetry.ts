@@ -9,7 +9,7 @@ const program = new Command();
 
 program
   .version("1.0.0")
-  .description("symmetry cli")
+  .description("symmetry server")
   .option(
     "-c, --config <path>",
     "Path to config file",
