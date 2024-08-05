@@ -11,7 +11,6 @@ Symmetry Server is a powerful and flexible server component of the Symmetry syst
   - [Usage](#usage)
     - [Command-line Options](#command-line-options)
   - [Features](#features)
-  - [Contributing](#contributing)
   - [License](#license)
 
 ## Installation
@@ -65,10 +64,6 @@ Or if you've set up the proper permissions:
 - Configurable through YAML files
 - Built on Hyperswarm for peer-to-peer networking
 - Extensible architecture
-
-## Contributing
-
-We welcome contributions to Symmetry Server! Please read our [Contributing Guidelines](CONTRIBUTING.md) for details on how to submit pull requests, report issues, and suggest improvements.
 
 ## License
 
