@@ -175,7 +175,7 @@ export class SymmetryServer {
         maxConnections: message.maxConnections,
         name: message.name,
         website: message.website,
-        provider: message.provider,
+        apiProvider: message.apiProvider,
       });
       logger.info(`👋 Peer provider joined ${peer.rawStream.remoteHost}`);
       peer.write(

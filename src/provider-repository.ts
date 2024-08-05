@@ -47,7 +47,7 @@ export class PeerRepository {
             message.maxConnections,
             message.name,
             message.website,
-            message.provider,
+            message.apiProvider,
           ],
           function (err) {
             if (err) {

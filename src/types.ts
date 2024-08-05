@@ -194,7 +194,7 @@ export interface PeerUpsert {
   maxConnections: number;
   name: string;
   website: string;
-  provider: string;
+  apiProvider: string;
 }
 
 export interface DbPeer {
