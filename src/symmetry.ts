@@ -20,4 +20,24 @@ program
     server.init();
   });
 
+program
+  .command("delete-peer <peerKey>")
+  .description("Delete a peer from the server")
+  .action(async (peerKey) => {
+    const server = new SymmetryServer(program.opts().config);
+    try {
+      await server.init(); // Initialize the server (this sets up the database connection)
+      const result = await server.deletePeer(peerKey);
+      if (result) {
+        console.log(`Peer ${peerKey} deleted successfully`);
+      } else {
+        console.log(`No peer found with key ${peerKey}`);
+      }
+    } catch (error) {
+      console.error(`Error deleting peer: ${error}`);
+    } finally {
+      process.exit(0);
+    }
+  });
+
 program.parse(process.argv);

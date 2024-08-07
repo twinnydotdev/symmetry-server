@@ -39,12 +39,12 @@ export class SessionManager {
   async verifySession(sessionId: string): Promise<string | null> {
     const session = await this.sessionRepository.get(sessionId);
     if (!session) {
-      logger.warning(`❌ Session not found: ${sessionId}`);
+      logger.warn(`❌ Session not found: ${sessionId}`);
       return null;
     }
 
     if (new Date() > session.expiresAt) {
-      logger.warning(`🕛 Session expired: ${sessionId}`);
+      logger.warn(`🕛 Session expired: ${sessionId}`);
       await this.sessionRepository.delete(sessionId);
       return null;
     }
@@ -55,7 +55,7 @@ export class SessionManager {
   async extendSession(sessionId: string): Promise<boolean> {
     const session = await this.sessionRepository.get(sessionId);
     if (!session) {
-      logger.warning(`🚨 Cannot extend non-existent session: ${sessionId}`);
+      logger.warn(`🚨 Cannot extend non-existent session: ${sessionId}`);
       return false;
     }
     session.expiresAt = new Date(Date.now() + this.sessionDuration);
@@ -69,7 +69,7 @@ export class SessionManager {
     if (result) {
       logger.info(`🗑 Session deleted: ${sessionId}`);
     } else {
-      logger.warning(`🚨 Failed to delete session: ${sessionId}`);
+      logger.warn(`🚨 Failed to delete session: ${sessionId}`);
     }
     return result;
   }

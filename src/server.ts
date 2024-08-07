@@ -83,7 +83,6 @@ export class SymmetryServer {
 
     const heartbeatInterval = setInterval(() => {
       peer.write(createMessage(serverMessageKeys.ping));
-      
       const timeout = setTimeout(() => {
         this.handleMissingPong(peerKey, maxMissedPongs);
       }, pongTimeout);
@@ -218,6 +217,32 @@ export class SymmetryServer {
     }
   }
 
+  async deletePeer(peerKey: string): Promise<boolean> {
+    logger.info(`Attempting to delete peer: ${peerKey}`);
+    try {
+      const changes = await this._peerRepository.deletePeer(peerKey);
+
+      if (changes) {
+        logger.info(chalk.green(`✔ Peer ${peerKey} deleted successfully`));
+
+        this.stopHeartbeat(peerKey);
+        this._pongTimeouts.delete(peerKey);
+        this._missedPongs.delete(peerKey);
+
+        await this._sessionManager.deleteSession(peerKey);
+
+        return true;
+      } else {
+        logger.warn(chalk.yellow(`⚠ No peer found with key ${peerKey}`));
+        return false;
+      }
+    } catch (error) {
+      logger.error(chalk.red(`❌ Error deleting peer ${peerKey}:`), error);
+
+      return false;
+    }
+  }
+
   async getRandomPeer(randomPeerRequest: PeerSessionRequest) {
     const providerPeer = await this._peerRepository.getRandom(
       randomPeerRequest
@@ -246,7 +271,7 @@ export class SymmetryServer {
       if (currentConnections >= maxConnections) return;
 
       if (!providerPeer) {
-        logger.warning(
+        logger.warn(
           `🚨 No providers found for ${peer.publicKey.toString("hex")}`
         );
         return;

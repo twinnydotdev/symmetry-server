@@ -31,7 +31,7 @@ export class Logger {
     }
   }
 
-  public warning(message: string, ...args: any[]): void {
+  public warn(message: string, ...args: any[]): void {
     if (this.logLevel <= LogLevel.WARNING) {
       console.log(chalk.yellow("⚠️ WARNING:"), message, ...args);
     }
