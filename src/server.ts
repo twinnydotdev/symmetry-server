@@ -140,11 +140,13 @@ export class SymmetryServer {
               peer,
               data.data as PeerSessionRequest
             );
+          case serverMessageKeys.completionSuccess:
+            return this.handleCompletionSuccess(peer);
+          case serverMessageKeys.verifySession:
+            return this.handleSessionValidation(peer, data.data as string);
           case serverMessageKeys.pong:
             this.handlePongReceived(peer.remotePublicKey.toString("hex"));
             break;
-          case serverMessageKeys.verifySession:
-            return this.handleSessionValidation(peer, data.data as string);
         }
       }
     });
@@ -154,6 +156,11 @@ export class SymmetryServer {
         console.log(chalk.red(`🔌 Connection reset by peer`));
       }
     });
+  }
+
+  async handleCompletionSuccess(peer: Peer) {
+    const peerKey = peer.remotePublicKey.toString("hex");
+    this._peerRepository.updateCompletionCount(peerKey);
   }
 
   async handleProviderConnections(peer: Peer, update: ConnectionSizeUpdate) {

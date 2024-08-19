@@ -148,6 +148,26 @@ export class PeerRepository {
     });
   }
 
+  updateCompletionCount( peerKey: string) {
+    return new Promise((resolve, reject) => {
+      this.db.run(
+        "UPDATE peers SET completion_count = completion_count + 1 WHERE key = ?",
+        [peerKey],
+        function (err) {
+          if (err) {
+            console.error(
+              chalk.red("❌ Error updating peer completion count in database:"),
+              err
+            );
+            reject(err);
+          } else {
+            resolve(this.changes);
+          }
+        }
+      );
+    });
+  }
+
   updateLastSeen(peerKey: string) {
     return new Promise((resolve, reject) => {
       this.db.run(

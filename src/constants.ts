@@ -15,6 +15,7 @@ export const serverMessageKeys = {
   providerDetails: "providerDetails",
   reportCompletion: "reportCompletion",
   requestProvider: "requestProvider",
+  completionSuccess: "completionSuccess",
   sessionValid: "sessionValid",
   verifySession: "verifySession",
 } as const;
