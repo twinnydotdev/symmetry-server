@@ -4,17 +4,17 @@ import crypto from "hypercore-crypto";
 import { Peer, safeParseJson, serverMessageKeys } from "symmetry-core";
 
 import {
-  PeerSessionRequest,
-  ConnectionSizeUpdate,
-  PeerUpsert,
   ChallengeRequest,
   ClientMessage,
+  ConnectionSizeUpdate,
+  PeerSessionRequest,
+  PeerUpsert,
 } from "./types";
 import { ConfigManager } from "./config-manager";
 import { createMessage } from "./utils";
 import { logger } from "./logger";
-import { PeerRepository } from "./provider-repository";
 import { MAX_RANDOM_PEER_REQUEST_ATTEMPTS } from "./constants";
+import { PeerRepository } from "./provider-repository";
 import { SessionManager } from "./session-manager";
 import { SessionRepository } from "./session-repository";
 import { WsServer } from "./websocket-server";
