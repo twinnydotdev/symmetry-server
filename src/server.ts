@@ -330,7 +330,3 @@ export class SymmetryServer {
     }
   }
 }
-
-module.exports = {
-  SymmetryServer,
-};
