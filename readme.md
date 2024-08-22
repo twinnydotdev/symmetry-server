@@ -19,7 +19,7 @@ To install Symmetry Server, follow these steps:
 
 1. Clone the repository:
    ```
-   git clone https://github.com/yourusername/symmetry-server.git
+   git clone https://github.com/twinnydotdev/symmetry-server.git
    cd symmetry-server
    ```
 
