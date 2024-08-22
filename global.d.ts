@@ -1,6 +1,7 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+
 declare module "hyperswarm" {
   import { EventEmitter } from "events";
+  import { Peer } from "symmetry-core";
 
   export interface Swarm {
     flushed(): Promise<void>;
@@ -12,23 +13,23 @@ declare module "hyperswarm" {
   }
   
   export interface SwarmOptions {
-    keyPair?: any;
+    keyPair?: { publicKey: string; secretKey: string };
     seed?: Buffer;
     maxPeers?: number;
     firewall?: (remotePublicKey: string) => boolean;
-    dht?: any;
+    dht?: unknown;
   }
 
   export default class Hyperswarm extends EventEmitter {
     constructor(opts?: SwarmOptions);
     join(topic: string | Buffer, opts?: JoinOptions): Swarm;
-    on: (key: string, cb: (data: any) => void) => void;
-    once: (key: string, cb: (data: any) => void) => void;
+    on: (key: string, cb: (data: Peer) => void) => void;
+    once: (key: string, cb: (data: Peer) => void) => void;
     flush: () => void;
     leave(topic: Buffer): void;
     destroy(): Promise<void>;
-    peers: Map<string, any>;
-    connections: Map<string, any>;
+    peers: Map<string, Peer>;
+    connections: Map<string, Peer>;
     connecting: boolean;
   }
 }
@@ -41,14 +42,4 @@ declare module "hypercore-crypto" {
   };
 
   export = hyperCoreCrypto;
-}
-declare module "b4a" {
-  const b4a: {
-    from(data: string | ArrayBuffer | Buffer, encoding?: string): Buffer;
-    toString(buf: Buffer, encoding?: string): string;
-    alloc(size: number): Buffer;
-    allocUnsafe(size: number): Buffer;
-  };
-
-  export = b4a;
 }

@@ -1,5 +1,6 @@
-import { database } from "./database";
 import { Database } from "sqlite3";
+
+import { database } from "./database";
 import { Session, PeerWithSession } from "./types";
 
 export class SessionRepository {

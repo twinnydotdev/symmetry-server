@@ -1,6 +1,7 @@
-import { ServerConfig } from "./types";
 import fs from "fs";
 import yaml from "js-yaml";
+
+import { ServerConfig } from "./types";
 
 export class ConfigManager {
   private config: ServerConfig;

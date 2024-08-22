@@ -1,4 +1,5 @@
 import { safeParseJson, ServerMessageKey } from "symmetry-core";
+
 import { ClientMessage } from "./types";
 
 export function createMessage<T>(key: ServerMessageKey, data?: T): string {
