@@ -1,6 +1,3 @@
 node_modules
 dist
-local-install.sh
-data
 sqlite.db
-install.sh
