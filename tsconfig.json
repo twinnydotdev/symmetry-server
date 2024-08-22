@@ -9,7 +9,7 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "lib": ["ES2018", "DOM", "DOM.Iterable"],
-    "types": ["node", "jest"],
+    "types": ["node"],
     "typeRoots": ["./node_modules/@types", "."],
     "moduleResolution": "node"
   },
@@ -19,10 +19,6 @@
   "files": [
     "global.d.ts"
   ],
-  "jest": {
-    "preset": "ts-jest",
-    "testEnvironment": "node"
-  },
-  "include": ["src/**/*", "__tests__/**/*", "global.d.ts"],
+  "include": ["src/**/*", "global.d.ts"],
   "exclude": ["node_modules"],
 }
