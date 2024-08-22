@@ -28,6 +28,11 @@ To install Symmetry Server, follow these steps:
    npm install
    ```
 
+3. Run database migrations
+   ```
+   npm run db:up
+   ```
+
 ## Configuration
 
 Symmetry Server uses a YAML configuration file. By default, it looks for the config file at:
