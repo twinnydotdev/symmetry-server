@@ -27,6 +27,7 @@
     "js-yaml": "^4.1.0",
     "localdrive": "^1.11.4",
     "sqlite3": "^5.1.7",
+    "symmetry-core": "^1.0.8",
     "ws": "^8.18.0"
   },
   "devDependencies": {

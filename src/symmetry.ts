@@ -26,7 +26,7 @@ program
   .action(async (peerKey) => {
     const server = new SymmetryServer(program.opts().config);
     try {
-      await server.init(); // Initialize the server (this sets up the database connection)
+      await server.init();
       const result = await server.deletePeer(peerKey);
       if (result) {
         console.log(`Peer ${peerKey} deleted successfully`);

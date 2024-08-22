@@ -1,23 +1,20 @@
 import chalk from "chalk";
 import Hyperswarm from "hyperswarm";
 import crypto from "hypercore-crypto";
+import { Peer, safeParseJson, serverMessageKeys } from "symmetry-core";
 
 import {
-  ClientMessage,
-  Peer,
   PeerSessionRequest,
   ConnectionSizeUpdate,
   PeerUpsert,
   ChallengeRequest,
+  ClientMessage,
 } from "./types";
 import { ConfigManager } from "./config-manager";
-import { createMessage, safeParseJson } from "./utils";
+import { createMessage } from "./utils";
 import { logger } from "./logger";
 import { PeerRepository } from "./provider-repository";
-import {
-  MAX_RANDOM_PEER_REQUEST_ATTEMPTS,
-  serverMessageKeys,
-} from "./constants";
+import { MAX_RANDOM_PEER_REQUEST_ATTEMPTS } from "./constants";
 import { SessionManager } from "./session-manager";
 import { SessionRepository } from "./session-repository";
 import { WsServer } from "./websocket-server";
@@ -140,8 +137,6 @@ export class SymmetryServer {
               peer,
               data.data as PeerSessionRequest
             );
-          case serverMessageKeys.completionSuccess:
-            return this.handleCompletionSuccess(peer);
           case serverMessageKeys.verifySession:
             return this.handleSessionValidation(peer, data.data as string);
           case serverMessageKeys.pong:
@@ -156,11 +151,6 @@ export class SymmetryServer {
         console.log(chalk.red(`🔌 Connection reset by peer`));
       }
     });
-  }
-
-  async handleCompletionSuccess(peer: Peer) {
-    const peerKey = peer.remotePublicKey.toString("hex");
-    this._peerRepository.updateCompletionCount(peerKey);
   }
 
   async handleProviderConnections(peer: Peer, update: ConnectionSizeUpdate) {
@@ -338,10 +328,6 @@ export class SymmetryServer {
         })
       );
     }
-  }
-
-  async cleanupSessions() {
-    await this._sessionManager.cleanupExpiredSessions();
   }
 }
 

@@ -120,17 +120,4 @@ export class SessionRepository {
       });
     });
   };
-
-  deleteExpired = (): Promise<number> => {
-    return new Promise((resolve, reject) => {
-      const sql = `DELETE FROM sessions WHERE expires_at <= datetime('now')`;
-      this.db.run(sql, function (err) {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(this.changes);
-        }
-      });
-    });
-  };
 }

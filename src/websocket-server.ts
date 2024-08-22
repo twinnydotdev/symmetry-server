@@ -11,6 +11,7 @@ export class WsServer {
   constructor(port: number, peerRepository: PeerRepository, swarm: Hyperswarm) {
     this._peerRepository = peerRepository;
     this._swarm = swarm;
+    this._swarm.emit("started");
     this.start(port);
   }
 

@@ -73,10 +73,4 @@ export class SessionManager {
     }
     return result;
   }
-
-  async cleanupExpiredSessions(): Promise<number> {
-    const deletedCount = await this.sessionRepository.deleteExpired();
-    logger.info(`🕛 Cleaned up ${deletedCount} expired sessions`);
-    return deletedCount;
-  }
 }

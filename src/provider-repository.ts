@@ -4,11 +4,11 @@ import chalk from "chalk";
 import { database } from "./database";
 import {
   DbPeer,
-  Peer,
   PeerSessionRequest as ProviderSessionRequest,
   PeerUpsert,
 } from "./types";
 import { logger } from "./logger";
+import { Peer } from "symmetry-core";
 
 export class PeerRepository {
   db: Database;
@@ -148,26 +148,6 @@ export class PeerRepository {
     });
   }
 
-  updateCompletionCount( peerKey: string) {
-    return new Promise((resolve, reject) => {
-      this.db.run(
-        "UPDATE peers SET completion_count = completion_count + 1 WHERE key = ?",
-        [peerKey],
-        function (err) {
-          if (err) {
-            console.error(
-              chalk.red("❌ Error updating peer completion count in database:"),
-              err
-            );
-            reject(err);
-          } else {
-            resolve(this.changes);
-          }
-        }
-      );
-    });
-  }
-
   updateLastSeen(peerKey: string) {
     return new Promise((resolve, reject) => {
       this.db.run(
@@ -237,14 +217,4 @@ export class PeerRepository {
       );
     });
   }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  updateStats(peerKey: string, data: any) {
-    // TODO: Update stats in database
-    logger.info(peerKey, data);
-  }
 }
-
-module.exports = {
-  PeerRepository,
-};
