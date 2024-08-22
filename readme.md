@@ -46,7 +46,7 @@ To start the Symmetry Server, run:
 node symmetry-server.js
 ```
 
-Or if you've set up the proper permissions:
+Or if you've set up the apropriate permissions:
 
 ```
 ./symmetry-server.js
