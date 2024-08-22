@@ -1,6 +1,6 @@
 # Symmetry Server
 
-Symmetry Server is a powerful and flexible server component of the Symmetry network, designed to facilitate distributed AI inference between connected peers on the symmetry network.
+Symmetry Server is the server component of the Symmetry network, designed to facilitate distributed AI inference between connected peers on the symmetry network.
 
 ## Table of Contents
 
