@@ -2,21 +2,19 @@ import { ServerConfig } from "./types";
 import fs from "fs";
 import yaml from "js-yaml";
 
-type Config = ServerConfig & { type: "server" };
-
 export class ConfigManager {
-  private config: Config;
+  private config: ServerConfig;
 
   constructor(configPath: string) {
     const configFile = fs.readFileSync(configPath, "utf8");
     const loadedConfig = yaml.load(configFile) as Partial<ServerConfig>;
     this.config = {
       ...loadedConfig,
-    } as Config;
+    } as ServerConfig;
     this.validate();
   }
 
-  public getAll () {
+  public getAll() {
     return this.config;
   }
 
@@ -25,7 +23,7 @@ export class ConfigManager {
       "path",
       "wsPort",
       "publicKey",
-      "privateKey"
+      "privateKey",
     ];
 
     for (const field of requiredFields) {
@@ -45,6 +43,6 @@ export class ConfigManager {
 
   get<K extends keyof ServerConfig>(key: K): ServerConfig[K];
   get(key: string): unknown {
-    return this.config[key as keyof Config];
+    return this.config[key as keyof ServerConfig];
   }
 }
