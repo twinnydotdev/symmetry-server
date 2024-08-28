@@ -44,7 +44,7 @@ Symmetry Server uses a YAML configuration file. By default, it looks for the con
 Your config file should look like this
 
 ```
-path: /home/twinnydotdev/.config/symmetry/server # The path to your config file.
+path: /home/twinnydotdev/.config/symmetry/server.yaml # The path to your config file.
 wsPort: 4005 # The port to use for WebSocket connections.
 publicKey: 4b4a9cc325d134dee6679e9407420023531fd7e96c563f6c5d00fd5549b77435
 privateKey: xxx # The private key.
