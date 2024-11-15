@@ -32,11 +32,13 @@ export class PeerRepository {
         this.db.run(
           `
           INSERT OR REPLACE INTO peers (
-            key, discovery_key, data_collection_enabled, model_name, public, 
-            server_key, max_connections, name, website, provider,
+            key, discovery_key, data_collection_enabled, model_name, public,
+            server_key, max_connections, name, website, provider, points,
             last_seen, online
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, TRUE)
-        `,
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 
+            (SELECT points FROM peers WHERE key = ?), 
+            CURRENT_TIMESTAMP, TRUE)
+          `,
           [
             message.key,
             message.discoveryKey,
