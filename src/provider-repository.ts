@@ -206,7 +206,7 @@ export class PeerRepository {
   getAllPeers(): Promise<Peer[]> {
     return new Promise((resolve, reject) => {
       this.db.all(
-        "SELECT id, last_seen, data_collection_enabled, max_connections, connections, model_name, name, online, public, provider FROM peers WHERE online = TRUE",
+        "SELECT id, last_seen, connected_since, points, data_collection_enabled, max_connections, connections, model_name, name, online, public, provider FROM peers WHERE online = TRUE",
         (err, rows: Peer[]) => {
           if (err) {
             reject(err);
@@ -218,7 +218,10 @@ export class PeerRepository {
     });
   }
 
-  async updateConnectedSince(peerKey: string, timestamp: Date | null): Promise<void> {
+  async updateConnectedSince(
+    peerKey: string,
+    timestamp: Date | null
+  ): Promise<void> {
     return new Promise((resolve, reject) => {
       const sql = `UPDATE peers SET connected_since = ? WHERE key = ?`;
       this.db.run(
