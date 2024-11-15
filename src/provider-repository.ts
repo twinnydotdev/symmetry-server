@@ -27,42 +27,38 @@ export class PeerRepository {
   }
 
   upsert(message: PeerUpsert) {
-    try {
-      return new Promise((resolve, reject) => {
-        this.db.run(
-          `
-          INSERT OR REPLACE INTO peers (
-            key, discovery_key, data_collection_enabled, model_name, public,
-            server_key, max_connections, name, website, provider, points,
-            last_seen, online
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 
-            (SELECT points FROM peers WHERE key = ?), 
-            CURRENT_TIMESTAMP, TRUE)
-          `,
-          [
-            message.key,
-            message.discoveryKey,
-            message.dataCollectionEnabled,
-            message.modelName,
-            message.public,
-            message.serverKey,
-            message.maxConnections,
-            message.name,
-            message.website,
-            message.apiProvider,
-          ],
-          function (err) {
-            if (err) {
-              reject(err);
-            } else {
-              resolve(this.lastID);
-            }
+    return new Promise((resolve, reject) => {
+      this.db.run(
+        `
+        INSERT OR REPLACE INTO peers (
+          key, discovery_key, data_collection_enabled, model_name, public, 
+          server_key, max_connections, name, website, provider,
+          last_seen, online, points
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, TRUE, 
+          (SELECT points FROM peers WHERE key = ?))
+        `,
+        [
+          message.key,
+          message.discoveryKey,
+          message.dataCollectionEnabled,
+          message.modelName,
+          message.public,
+          message.serverKey,
+          message.maxConnections,
+          message.name,
+          message.website,
+          message.apiProvider,
+          message.key, // For points subquery
+        ],
+        function (err) {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(this.lastID);
           }
-        );
-      });
-    } catch (e) {
-      logger.error(`Error upserting peer ${message.key}: ${e}`);
-    }
+        }
+      );
+    });
   }
 
   getByKey(key: string): Promise<DbPeer> {
