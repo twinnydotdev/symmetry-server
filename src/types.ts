@@ -60,8 +60,24 @@ export interface DbPeer {
   online?: boolean;
   updated_at: Date;
   provider: string;
+  connected_since: Date | null;
+  points?: number;
 }
 
 export interface ConnectionSizeUpdate {
   connections: number;
+}
+
+export interface PeerReward {
+  peer_key: string;
+  points: number;
+  total_connection_time: number;
+  last_points_update: Date;
+}
+
+export interface PeerConnection {
+  peer_key: string;
+  connected_at: Date;
+  disconnected_at?: Date;
+  points_earned: number;
 }

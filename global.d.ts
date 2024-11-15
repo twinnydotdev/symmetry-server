@@ -13,7 +13,7 @@ declare module "hyperswarm" {
   }
   
   export interface SwarmOptions {
-    keyPair?: { publicKey: string; secretKey: string };
+    keyPair?: { publicKey: Buffer; secretKey: Buffer };
     seed?: Buffer;
     maxPeers?: number;
     firewall?: (remotePublicKey: string) => boolean;

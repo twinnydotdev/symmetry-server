@@ -1,7 +1,11 @@
 import chalk from "chalk";
 import Hyperswarm from "hyperswarm";
 import crypto from "hypercore-crypto";
-import { Peer, safeParseJson, serverMessageKeys } from "symmetry-core";
+import {
+  Peer,
+  safeParseJson,
+  serverMessageKeys,
+} from "symmetry-core";
 
 import {
   ChallengeRequest,
@@ -21,12 +25,17 @@ import { WsServer } from "./websocket-server";
 
 export class SymmetryServer {
   private _config: ConfigManager;
-  private _peerRepository: PeerRepository;
-  private _sessionRepository: SessionRepository;
-  private _sessionManager: SessionManager;
-  private _pongTimeouts: Map<string, NodeJS.Timeout> = new Map();
-  private _missedPongs: Map<string, number> = new Map();
+  private _connectedPeers: Map<string, Peer>;
   private _heartbeatIntervals: Map<string, NodeJS.Timeout> = new Map();
+  private _missedPongs: Map<string, number> = new Map();
+  private _peerRepository: PeerRepository;
+  private _pointsIntervals: Map<string, NodeJS.Timeout> = new Map();
+  private _pongTimeouts: Map<string, NodeJS.Timeout> = new Map();
+  private _sessionManager: SessionManager;
+  private _sessionRepository: SessionRepository;
+
+  private readonly POINTS_MAX_HOURLY_BONUS = 6;
+  private readonly POINTS_INTERVAL_MS = 1 * 60 * 1000;
 
   constructor(configPath: string) {
     logger.info(`🔗 Initializing server using config file: ${configPath}`);
@@ -34,10 +43,16 @@ export class SymmetryServer {
     this._peerRepository = new PeerRepository();
     this._sessionRepository = new SessionRepository();
     this._sessionManager = new SessionManager(this._sessionRepository, 5);
+    this._connectedPeers = new Map<string, Peer>();
   }
 
   async init() {
-    const swarm = new Hyperswarm();
+    const swarm = new Hyperswarm({
+      keyPair: {
+        publicKey: Buffer.from(this._config.get("publicKey"), "hex"),
+        secretKey: Buffer.from(this._config.get("privateKey"), "hex"),
+      },
+    });
     const discoveryKey = crypto.discoveryKey(
       Buffer.from(this._config.get("publicKey"))
     );
@@ -90,6 +105,48 @@ export class SymmetryServer {
     this._heartbeatIntervals.set(peerKey, heartbeatInterval);
   }
 
+  private startPointsTracking(peer: Peer) {
+    const peerKey = peer.remotePublicKey.toString("hex");
+
+    this._peerRepository.updateConnectedSince(peerKey, new Date());
+
+    const interval = setInterval(async () => {
+      try {
+        const peer = await this._peerRepository.getByKey(peerKey);
+        if (!peer?.connected_since) return;
+
+        const hoursConnected = Math.floor(
+          (Date.now() - new Date(peer.connected_since).getTime()) /
+            (1000 * 60 * 60)
+        );
+
+        const hourlyBonus = Math.min(
+          hoursConnected,
+          this.POINTS_MAX_HOURLY_BONUS
+        );
+        const pointsToAdd = 1 + hourlyBonus;
+
+        await this._peerRepository.addPoints(peerKey, pointsToAdd);
+        logger.debug(
+          `Added ${pointsToAdd} points to peer ${peerKey} (connected for ${hoursConnected} hours, bonus: +${hourlyBonus})`
+        );
+      } catch (error) {
+        logger.error(`Error updating points for peer ${peerKey}:`, error);
+      }
+    }, this.POINTS_INTERVAL_MS);
+
+    this._pointsIntervals.set(peerKey, interval);
+  }
+
+  private stopPointsTracking(peerKey: string) {
+    const interval = this._pointsIntervals.get(peerKey);
+    if (interval) {
+      clearInterval(interval);
+      this._pointsIntervals.delete(peerKey);
+      this._peerRepository.updateConnectedSince(peerKey, null);
+    }
+  }
+
   private handlePongReceived(peerKey: string) {
     this.clearPongTimeout(peerKey);
   }
@@ -113,9 +170,15 @@ export class SymmetryServer {
   }
 
   listeners(peer: Peer) {
-    peer.on("error", (err) => err);
+    peer.on("error", (err) => {
+      const peerKey = peer.remotePublicKey.toString("hex");
+      this.stopPointsTracking(peerKey);
+      return err;
+    });
 
     peer.on("close", () => {
+      const peerKey = peer.remotePublicKey.toString("hex");
+      this.stopPointsTracking(peerKey);
       logger.info(`🔗 Connection closed: ${peer.rawStream.remoteHost}`);
     });
 
@@ -173,13 +236,15 @@ export class SymmetryServer {
         website: message.website,
         apiProvider: message.apiProvider,
       });
-      logger.info(`👋 Peer provider joined ${peer.rawStream.remoteHost}`);
+      this.startPointsTracking(peer);
+      logger.info(`👋 Peer provider joined ${peer.rawStream.remoteHost} / ${peerKey}`);
       peer.write(
         createMessage(serverMessageKeys.joinAck, {
           status: "success",
           key: peerKey,
         })
       );
+      this._connectedPeers.set(peerKey, peer);
     } catch (error: unknown) {
       let errorMessage = "";
       if (error instanceof Error) errorMessage = error.message;
@@ -220,6 +285,7 @@ export class SymmetryServer {
       const changes = await this._peerRepository.deletePeer(peerKey);
 
       if (changes) {
+        this.stopPointsTracking(peerKey);
         logger.info(chalk.green(`✔ Peer ${peerKey} deleted successfully`));
 
         this.stopHeartbeat(peerKey);
@@ -269,7 +335,7 @@ export class SymmetryServer {
 
       if (!providerPeer) {
         logger.warn(
-          `🚨 No providers found for ${peer.publicKey.toString("hex")}`
+          `🚨 No providers found for ${peer.remotePublicKey.toString("hex")}`
         );
         return;
       }

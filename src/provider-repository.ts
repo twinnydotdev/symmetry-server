@@ -217,4 +217,34 @@ export class PeerRepository {
       );
     });
   }
+
+  async updateConnectedSince(peerKey: string, timestamp: Date | null): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const sql = `UPDATE peers SET connected_since = ? WHERE key = ?`;
+      this.db.run(
+        sql,
+        [timestamp ? timestamp.toISOString() : null, peerKey],
+        function (err) {
+          if (err) {
+            reject(err);
+          } else {
+            resolve();
+          }
+        }
+      );
+    });
+  }
+
+  async addPoints(peerKey: string, points: number): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const sql = `UPDATE peers SET points = COALESCE(points, 0) + ? WHERE key = ?`;
+      this.db.run(sql, [points, peerKey], function (err) {
+        if (err) {
+          reject(err);
+        } else {
+          resolve();
+        }
+      });
+    });
+  }
 }
