@@ -20,7 +20,7 @@ export class PeerRepository {
   async setPeerOffline(peerKey: string) {
     try {
       this.db.run("UPDATE peers SET online = FALSE WHERE key = ?", [peerKey]);
-      logger.info(`Updated status for peer ${peerKey}}`);
+      logger.info(`Updated status offline for peer ${peerKey}`);
     } catch (error) {
       logger.error(`Failed to update status for peer ${peerKey}: ${error}`);
     }
