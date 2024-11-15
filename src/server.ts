@@ -88,7 +88,7 @@ export class SymmetryServer {
   }
 
   startHeartbeat(peer: Peer) {
-    const peerKey = peer.remotePublicKey.toString("hex");
+    const peerKey = peer.publicKey.toString("hex");
     const pingInterval = 10000;
     const pongTimeout = 20000;
     const maxMissedPongs = 5;
