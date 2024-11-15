@@ -23,7 +23,7 @@
     "hyperswarm": "^4.8.0",
     "js-yaml": "^4.1.0",
     "sqlite3": "^5.1.7",
-    "symmetry-core": "^1.0.8",
+    "symmetry-core": "^1.0.11",
     "ws": "^8.18.0"
   },
   "devDependencies": {
