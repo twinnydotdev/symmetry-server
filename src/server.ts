@@ -53,6 +53,7 @@ export class SymmetryServer {
         secretKey: Buffer.from(this._config.get("privateKey"), "hex"),
       },
     });
+    await this.resetAllPeersOnStartup();
     const discoveryKey = crypto.discoveryKey(
       Buffer.from(this._config.get("publicKey"))
     );
@@ -74,6 +75,21 @@ export class SymmetryServer {
       chalk.green(`\u2713  Symmetry server started, waiting for connections...`)
     );
     logger.info(chalk.green(`🔑 Public key: ${this._config.get("publicKey")}`));
+  }
+
+  private async resetAllPeersOnStartup() {
+    try {
+      logger.info('Resetting all peer connections on startup...');
+      await this._peerRepository.resetAllPeerConnections();
+      this._connectedPeers.clear();
+      this._heartbeatIntervals.clear();
+      this._missedPongs.clear();
+      this._pointsIntervals.clear();
+      this._pongTimeouts.clear();
+      logger.info('Successfully reset all peer connections');
+    } catch (error) {
+      logger.error('Failed to reset peer connections:', error);
+    }
   }
 
   private startPointsTracking(peer: Peer) {
