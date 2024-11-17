@@ -61,7 +61,6 @@ export class SymmetryServer {
     swarm.on("connection", (peer: Peer) => {
       logger.info(`🔗 New Connection: ${peer.rawStream.remoteHost}`);
       this.listeners(peer);
-      this.startHeartbeat(peer);
     });
     new WsServer(this._config.get("wsPort"), this._peerRepository, swarm);
     logger.info(
@@ -75,34 +74,6 @@ export class SymmetryServer {
       chalk.green(`\u2713  Symmetry server started, waiting for connections...`)
     );
     logger.info(chalk.green(`🔑 Public key: ${this._config.get("publicKey")}`));
-  }
-
-  stopHeartbeat(peerKey: string) {
-    const heartbeatInterval = this._heartbeatIntervals.get(peerKey);
-    if (heartbeatInterval) {
-      clearInterval(heartbeatInterval);
-      this._heartbeatIntervals.delete(peerKey);
-    }
-    this.clearPongTimeout(peerKey);
-    this._missedPongs.delete(peerKey);
-  }
-
-  startHeartbeat(peer: Peer) {
-    const peerKey = peer.remotePublicKey.toString("hex");
-    const pingInterval = 10000;
-    const pongTimeout = 20000;
-    const maxMissedPongs = 5;
-
-    const heartbeatInterval = setInterval(() => {
-      peer.write(createMessage(serverMessageKeys.ping));
-      const timeout = setTimeout(() => {
-        this.handleMissingPong(peerKey, maxMissedPongs);
-      }, pongTimeout);
-
-      this._pongTimeouts.set(peerKey, timeout);
-    }, pingInterval);
-
-    this._heartbeatIntervals.set(peerKey, heartbeatInterval);
   }
 
   private startPointsTracking(peer: Peer) {
@@ -147,28 +118,6 @@ export class SymmetryServer {
     }
   }
 
-  private handlePongReceived(peerKey: string) {
-    this.clearPongTimeout(peerKey);
-  }
-
-  private async handleMissingPong(peerKey: string, maxMissedPongs: number) {
-    const missedPongs = (this._missedPongs.get(peerKey) || 0) + 1;
-    this._missedPongs.set(peerKey, missedPongs);
-
-    if (missedPongs >= maxMissedPongs) {
-      await this._peerRepository.setPeerOffline(peerKey);
-      this.stopHeartbeat(peerKey);
-    }
-  }
-
-  private clearPongTimeout(peerKey: string) {
-    const timeout = this._pongTimeouts.get(peerKey);
-    if (timeout) {
-      clearTimeout(timeout);
-      this._pongTimeouts.delete(peerKey);
-    }
-  }
-
   listeners(peer: Peer) {
     peer.on("error", (err) => {
       const peerKey = peer.remotePublicKey.toString("hex");
@@ -179,6 +128,7 @@ export class SymmetryServer {
     peer.on("close", () => {
       const peerKey = peer.remotePublicKey.toString("hex");
       this.stopPointsTracking(peerKey);
+      this._peerRepository.setPeerOffline(peerKey);
       logger.info(`🔗 Connection closed: ${peer.rawStream.remoteHost}`);
     });
 
@@ -202,9 +152,6 @@ export class SymmetryServer {
             );
           case serverMessageKeys.verifySession:
             return this.handleSessionValidation(peer, data.data as string);
-          case serverMessageKeys.pong:
-            this.handlePongReceived(peer.remotePublicKey.toString("hex"));
-            break;
         }
       }
     });
@@ -288,7 +235,6 @@ export class SymmetryServer {
         this.stopPointsTracking(peerKey);
         logger.info(chalk.green(`✔ Peer ${peerKey} deleted successfully`));
 
-        this.stopHeartbeat(peerKey);
         this._pongTimeouts.delete(peerKey);
         this._missedPongs.delete(peerKey);
 
