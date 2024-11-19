@@ -1,0 +1,13 @@
+BEGIN TRANSACTION;
+
+CREATE TABLE ip_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ip_address TEXT NOT NULL,
+    message_count INTEGER DEFAULT 0,
+    first_seen DATETIME DEFAULT CURRENT_TIMESTAMP,
+    last_seen DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX idx_ip_messages_ip ON ip_messages(ip_address);
+
+COMMIT;

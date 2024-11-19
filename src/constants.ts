@@ -1,1 +1,2 @@
 export const MAX_RANDOM_PEER_REQUEST_ATTEMPTS = 5
+export const SERVER_PORT = 4005

@@ -1,11 +1,7 @@
 import chalk from "chalk";
 import Hyperswarm from "hyperswarm";
 import crypto from "hypercore-crypto";
-import {
-  Peer,
-  safeParseJson,
-  serverMessageKeys,
-} from "symmetry-core";
+import { Peer, safeParseJson, serverMessageKeys } from "symmetry-core";
 
 import {
   ChallengeRequest,
@@ -17,25 +13,33 @@ import {
 import { ConfigManager } from "./config-manager";
 import { createMessage } from "./utils";
 import { logger } from "./logger";
-import { MAX_RANDOM_PEER_REQUEST_ATTEMPTS } from "./constants";
+import { MAX_RANDOM_PEER_REQUEST_ATTEMPTS, SERVER_PORT } from "./constants";
 import { PeerRepository } from "./provider-repository";
 import { SessionManager } from "./session-manager";
 import { SessionRepository } from "./session-repository";
-import { WsServer } from "./websocket-server";
+import Fastify from "fastify";
+import fastifyWebsocket, { WebSocket } from "@fastify/websocket";
+import fastifyCors from "@fastify/cors";
+import { MessageRepository } from "./message-repository";
 
 export class SymmetryServer {
   private _config: ConfigManager;
   private _connectedPeers: Map<string, Peer>;
   private _heartbeatIntervals: Map<string, NodeJS.Timeout> = new Map();
+  private _messageRepo: MessageRepository;
   private _missedPongs: Map<string, number> = new Map();
   private _peerRepository: PeerRepository;
   private _pointsIntervals: Map<string, NodeJS.Timeout> = new Map();
   private _pongTimeouts: Map<string, NodeJS.Timeout> = new Map();
   private _sessionManager: SessionManager;
   private _sessionRepository: SessionRepository;
+  private _swarm: Hyperswarm | null = null;
+  private server = Fastify();
 
   private readonly POINTS_MAX_HOURLY_BONUS = 6;
   private readonly POINTS_INTERVAL_MS = 1 * 60 * 1000;
+  private readonly MAX_REQUESTS = 100;
+  private readonly TIME_WINDOW = 60;
 
   constructor(configPath: string) {
     logger.info(`🔗 Initializing server using config file: ${configPath}`);
@@ -44,6 +48,7 @@ export class SymmetryServer {
     this._sessionRepository = new SessionRepository();
     this._sessionManager = new SessionManager(this._sessionRepository, 5);
     this._connectedPeers = new Map<string, Peer>();
+    this._messageRepo = new MessageRepository();
   }
 
   async init() {
@@ -53,6 +58,7 @@ export class SymmetryServer {
         secretKey: Buffer.from(this._config.get("privateKey"), "hex"),
       },
     });
+    this._swarm = swarm;
     await this.resetAllPeersOnStartup();
     const discoveryKey = crypto.discoveryKey(
       Buffer.from(this._config.get("publicKey"))
@@ -63,14 +69,7 @@ export class SymmetryServer {
       logger.info(`🔗 New Connection: ${peer.rawStream.remoteHost}`);
       this.listeners(peer);
     });
-    new WsServer(this._config.get("wsPort"), this._peerRepository, swarm);
-    logger.info(
-      chalk.green(
-        `\u2713  Websocket server started: ws://localhost:${this._config.get(
-          "wsPort"
-        )}`
-      )
-    );
+    this.startServer();
     logger.info(
       chalk.green(`\u2713  Symmetry server started, waiting for connections...`)
     );
@@ -79,16 +78,16 @@ export class SymmetryServer {
 
   private async resetAllPeersOnStartup() {
     try {
-      logger.info('Resetting all peer connections on startup...');
+      logger.info("Resetting all peer connections on startup...");
       await this._peerRepository.resetAllPeerConnections();
       this._connectedPeers.clear();
       this._heartbeatIntervals.clear();
       this._missedPongs.clear();
       this._pointsIntervals.clear();
       this._pongTimeouts.clear();
-      logger.info('Successfully reset all peer connections');
+      logger.info("Successfully reset all peer connections");
     } catch (error) {
-      logger.error('Failed to reset peer connections:', error);
+      logger.error("Failed to reset peer connections:", error);
     }
   }
 
@@ -200,7 +199,9 @@ export class SymmetryServer {
         apiProvider: message.apiProvider,
       });
       this.startPointsTracking(peer);
-      logger.info(`👋 Peer provider joined ${peer.rawStream.remoteHost} / ${peerKey}`);
+      logger.info(
+        `👋 Peer provider joined ${peer.rawStream.remoteHost} / ${peerKey}`
+      );
       peer.write(
         createMessage(serverMessageKeys.joinAck, {
           status: "success",
@@ -356,5 +357,105 @@ export class SymmetryServer {
         })
       );
     }
+  }
+
+  private async startServer() {
+    await this.server.register(fastifyWebsocket);
+    await this.server.register(fastifyCors, {
+      origin: ["http://localhost:5173", "https://twinny.dev"],
+      methods: ["GET", "POST"],
+      credentials: true,
+    });
+
+    this.server.post("/v1/chat/completions", async (request, reply) => {
+      const clientIp = request.ip;
+      const messageCount = await this._messageRepo.getMessageCount(
+        clientIp,
+        this.TIME_WINDOW
+      );
+
+      if (messageCount && messageCount.message_count >= this.MAX_REQUESTS) {
+        reply
+          .code(429)
+          .send({
+            error: `Rate limit exceeded, max ${this.MAX_REQUESTS} requests per ${this.TIME_WINDOW} minutes`,
+          });
+        return;
+      }
+
+      await this._messageRepo.incrementMessageCount(clientIp);
+
+      reply.raw.writeHead(200, {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+        "Access-Control-Allow-Origin": "*",
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const message = request.body as any;
+      const dbPeer = await this._peerRepository.getRandom(
+        message.sessionRequest
+      );
+
+      if (!dbPeer) {
+        reply.raw.end('data: {"error":"No peers available"}\n\n');
+        return;
+      }
+
+      const peer = this._connectedPeers.get(dbPeer.key);
+      const data = createMessage(serverMessageKeys.inference, {
+        messages: message.data.messages,
+        key: peer?.remotePublicKey,
+      });
+
+      peer?.write(data);
+      peer?.on("data", (data) => reply.raw.write(data));
+
+      request.raw.on("close", () => reply.raw.end(""));
+    });
+
+    const WEBSOCKET_INTERVAL = 5000;
+
+    this.server.get("/ws", { websocket: true }, (ws) => {
+      this.sendStats(ws);
+      setInterval(() => this.sendStats(ws), WEBSOCKET_INTERVAL);
+    });
+
+    try {
+      await this.server.listen({ port: SERVER_PORT });
+      logger.info(`Server listening on port ${SERVER_PORT}`);
+    } catch (err) {
+      console.error("Error starting server:", err);
+      process.exit(1);
+    }
+  }
+
+  private async sendStats(ws: WebSocket) {
+    const stats = await this.getStats();
+    ws.send(JSON.stringify(stats));
+  }
+
+  async broadcastStats() {
+    const stats = await this.getStats();
+    this.server.websocketServer.clients.forEach(
+      (client: { readyState: number; send: (arg0: string) => void }) => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(JSON.stringify(stats));
+        }
+      }
+    );
+  }
+
+  private async getStats() {
+    const activePeers = await this._peerRepository.getActivePeerCount();
+    const activeModels = await this._peerRepository.getActiveModelCount();
+    const allPeers = await this._peerRepository.getAllPeers();
+
+    return {
+      activePeers,
+      activeModels,
+      allPeers,
+    };
   }
 }

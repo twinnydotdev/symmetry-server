@@ -7,7 +7,7 @@ export interface ServerConfig {
 
 export interface ClientMessage<T = unknown> {
   key: string;
-  data: T;
+  data?: T;
 }
 
 export interface Session {
@@ -80,4 +80,12 @@ export interface PeerConnection {
   connected_at: Date;
   disconnected_at?: Date;
   points_earned: number;
+}
+
+export interface IpMessageRow {
+  id: number;
+  ip_address: string;
+  message_count: number;
+  first_seen: string;
+  last_seen: string;
 }
