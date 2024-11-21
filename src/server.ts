@@ -17,7 +17,7 @@ import { MAX_RANDOM_PEER_REQUEST_ATTEMPTS, SERVER_PORT } from "./constants";
 import { PeerRepository } from "./provider-repository";
 import { SessionManager } from "./session-manager";
 import { SessionRepository } from "./session-repository";
-import Fastify from "fastify";
+import Fastify, { FastifyReply } from "fastify";
 import fastifyWebsocket, { WebSocket } from "@fastify/websocket";
 import fastifyCors from "@fastify/cors";
 import { MessageRepository } from "./message-repository";
@@ -34,7 +34,8 @@ export class SymmetryServer {
   private _sessionManager: SessionManager;
   private _sessionRepository: SessionRepository;
   private _swarm: Hyperswarm | null = null;
-  private server = Fastify();
+  private _server = Fastify();
+  private _peerReplies: Map<string, FastifyReply> = new Map();
 
   private readonly POINTS_MAX_HOURLY_BONUS = 6;
   private readonly POINTS_INTERVAL_MS = 1 * 60 * 1000;
@@ -134,21 +135,39 @@ export class SymmetryServer {
   }
 
   listeners(peer: Peer) {
+    const peerKey = peer.remotePublicKey.toString("hex");
+
     peer.on("error", (err) => {
-      const peerKey = peer.remotePublicKey.toString("hex");
       this.stopPointsTracking(peerKey);
+      const reply = this._peerReplies.get(peerKey);
+      if (reply && !reply.raw.closed) {
+        reply.raw.end(`data: {"error":"Peer error: ${err.message}"}\n\n`);
+      }
       return err;
     });
 
     peer.on("close", () => {
-      const peerKey = peer.remotePublicKey.toString("hex");
       this.stopPointsTracking(peerKey);
       this._peerRepository.setPeerOffline(peerKey);
       logger.info(`🔗 Connection closed: ${peer.rawStream.remoteHost}`);
+
+      const reply = this._peerReplies.get(peerKey);
+      if (reply && !reply.raw.closed) {
+        reply.raw.end(`data: {"message":"Connection closed"}\n\n`);
+      }
+
+      this._peerReplies.delete(peerKey);
     });
 
     peer.on("data", (message) => {
       const data = safeParseJson<ClientMessage>(message.toString());
+
+      const reply = this._peerReplies.get(peerKey);
+
+      if (reply && !reply.raw.closed) {
+        return reply.raw.write(message);
+      }
+
       if (data && data.key) {
         switch (data?.key) {
           case serverMessageKeys.join:
@@ -360,8 +379,8 @@ export class SymmetryServer {
   }
 
   private async startServer() {
-    await this.server.register(fastifyWebsocket);
-    await this.server.register(fastifyCors, {
+    await this._server.register(fastifyWebsocket);
+    await this._server.register(fastifyCors, {
       origin: [
         "https://twinny.dev",
         "https://www.twinny.dev"
@@ -370,7 +389,7 @@ export class SymmetryServer {
       credentials: true,
     });
 
-    this.server.post("/v1/chat/completions", async (request, reply) => {
+    this._server.post("/v1/chat/completions", async (request, reply) => {
       const clientIp = request.ip;
       const messageCount = await this._messageRepo.getMessageCount(
         clientIp,
@@ -378,11 +397,9 @@ export class SymmetryServer {
       );
 
       if (messageCount && messageCount.message_count >= this.MAX_REQUESTS) {
-        reply
-          .code(429)
-          .send({
-            error: `Rate limit exceeded, max ${this.MAX_REQUESTS} requests per ${this.TIME_WINDOW} minutes`,
-          });
+        reply.code(429).send({
+          error: `Rate limit exceeded, max ${this.MAX_REQUESTS} requests per ${this.TIME_WINDOW} minutes`,
+        });
         return;
       }
 
@@ -407,26 +424,31 @@ export class SymmetryServer {
       }
 
       const peer = this._connectedPeers.get(dbPeer.key);
+
+      const peerKey = dbPeer.key;
+      this._peerReplies.set(peerKey, reply);
+
       const data = createMessage(serverMessageKeys.inference, {
         messages: message.data.messages,
         key: peer?.remotePublicKey,
       });
 
       peer?.write(data);
-      peer?.on("data", (data) => reply.raw.write(data));
 
-      request.raw.on("close", () => reply.raw.end(""));
+      request.raw.on("close", () => {
+        this._peerReplies.delete(peerKey);
+      });
     });
 
     const WEBSOCKET_INTERVAL = 5000;
 
-    this.server.get("/ws", { websocket: true }, (ws) => {
+    this._server.get("/ws", { websocket: true }, (ws) => {
       this.sendStats(ws);
       setInterval(() => this.sendStats(ws), WEBSOCKET_INTERVAL);
     });
 
     try {
-      await this.server.listen({ port: SERVER_PORT });
+      await this._server.listen({ port: SERVER_PORT });
       logger.info(`Server listening on port ${SERVER_PORT}`);
     } catch (err) {
       console.error("Error starting server:", err);
@@ -441,7 +463,7 @@ export class SymmetryServer {
 
   async broadcastStats() {
     const stats = await this.getStats();
-    this.server.websocketServer.clients.forEach(
+    this._server.websocketServer.clients.forEach(
       (client: { readyState: number; send: (arg0: string) => void }) => {
         if (client.readyState === WebSocket.OPEN) {
           client.send(JSON.stringify(stats));
