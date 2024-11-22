@@ -7,6 +7,7 @@ import {
   ChallengeRequest,
   ClientMessage,
   ConnectionSizeUpdate,
+  HealthCheck,
   PeerSessionRequest,
   PeerUpsert,
 } from "./types";
@@ -36,10 +37,13 @@ export class SymmetryServer {
   private _swarm: Hyperswarm | null = null;
   private _server = Fastify();
   private _peerReplies: Map<string, FastifyReply> = new Map();
+  private _healthChecks: Map<string, HealthCheck> = new Map();
 
-  private readonly POINTS_MAX_HOURLY_BONUS = 6;
-  private readonly POINTS_INTERVAL_MS = 1 * 60 * 1000;
+  private readonly HEALTH_CHECK_INTERVAL = 5 * 60 * 1000; // 5 minutes
+  private readonly MAX_FAILURES = 3;
   private readonly MAX_REQUESTS = 100;
+  private readonly POINTS_INTERVAL_MS = 1 * 60 * 1000; // 1 minute
+  private readonly POINTS_MAX_HOURLY_BONUS = 6;
   private readonly TIME_WINDOW = 60;
 
   constructor(configPath: string) {
@@ -70,7 +74,7 @@ export class SymmetryServer {
       logger.info(`🔗 New Connection: ${peer.rawStream.remoteHost}`);
       this.listeners(peer);
     });
-    this.startServer();
+    this.startWebServer();
     logger.info(
       chalk.green(`\u2713  Symmetry server started, waiting for connections...`)
     );
@@ -91,48 +95,7 @@ export class SymmetryServer {
       logger.error("Failed to reset peer connections:", error);
     }
   }
-
-  private startPointsTracking(peer: Peer) {
-    const peerKey = peer.remotePublicKey.toString("hex");
-
-    this._peerRepository.updateConnectedSince(peerKey, new Date());
-
-    const interval = setInterval(async () => {
-      try {
-        const peer = await this._peerRepository.getByKey(peerKey);
-        if (!peer?.connected_since) return;
-
-        const hoursConnected = Math.floor(
-          (Date.now() - new Date(peer.connected_since).getTime()) /
-            (1000 * 60 * 60)
-        );
-
-        const hourlyBonus = Math.min(
-          hoursConnected,
-          this.POINTS_MAX_HOURLY_BONUS
-        );
-        const pointsToAdd = 1 + hourlyBonus;
-
-        await this._peerRepository.addPoints(peerKey, pointsToAdd);
-        logger.debug(
-          `Added ${pointsToAdd} points to peer ${peerKey} (connected for ${hoursConnected} hours, bonus: +${hourlyBonus})`
-        );
-      } catch (error) {
-        logger.error(`Error updating points for peer ${peerKey}:`, error);
-      }
-    }, this.POINTS_INTERVAL_MS);
-
-    this._pointsIntervals.set(peerKey, interval);
-  }
-
-  private stopPointsTracking(peerKey: string) {
-    const interval = this._pointsIntervals.get(peerKey);
-    if (interval) {
-      clearInterval(interval);
-      this._pointsIntervals.delete(peerKey);
-      this._peerRepository.updateConnectedSince(peerKey, null);
-    }
-  }
+  
 
   listeners(peer: Peer) {
     const peerKey = peer.remotePublicKey.toString("hex");
@@ -197,6 +160,79 @@ export class SymmetryServer {
     });
   }
 
+  private startHealthCheck(peer: Peer) {
+    const peerKey = peer.remotePublicKey.toString("hex");
+
+    const check = async () => {
+      const isHealthy = await this.checkProviderHealth(peer);
+      const healthCheck = this._healthChecks.get(peerKey);
+
+      if (!healthCheck) return;
+
+      if (!isHealthy) {
+        healthCheck.failures++;
+
+        if (healthCheck.failures >= this.MAX_FAILURES) {
+          logger.warn(
+            `Peer ${peerKey} failed ${this.MAX_FAILURES} health checks, disconnecting...`
+          );
+          this.disconnectPeer(peer);
+          return;
+        }
+      } else {
+        healthCheck.failures = 0;
+      }
+    };
+
+    this._healthChecks.set(peerKey, {
+      interval: setInterval(check, this.HEALTH_CHECK_INTERVAL),
+      failures: 0,
+      checkInterval: this.HEALTH_CHECK_INTERVAL,
+    });
+  }
+
+  private async checkProviderHealth(peer: Peer) {
+    const peerKey = peer.remotePublicKey.toString("hex");
+
+    try {
+      const testMessage = createMessage(serverMessageKeys.healthCheck, {
+        messages: [{ role: "user", content: "Test message" }],
+        key: peer.remotePublicKey,
+      });
+
+      return new Promise<boolean>((resolve) => {
+        const timeout = setTimeout(() => {
+          resolve(false);
+        }, 10000);
+
+        peer.once("data", (data) => {
+          clearTimeout(timeout);
+          const response = safeParseJson(data.toString());
+          resolve(!!response);
+        });
+
+        peer.write(testMessage);
+      });
+    } catch (error) {
+      logger.error(`Health check failed for peer ${peerKey}:`, error);
+      return false;
+    }
+  }
+
+  private disconnectPeer(peer: Peer) {
+    const peerKey = peer.remotePublicKey.toString("hex");
+
+    const healthCheck = this._healthChecks.get(peerKey);
+    if (healthCheck) {
+      clearInterval(healthCheck.interval);
+      this._healthChecks.delete(peerKey);
+    }
+
+    this._connectedPeers.delete(peerKey);
+    this._peerRepository.setPeerOffline(peerKey);
+    peer.destroy();
+  }
+
   async handleProviderConnections(peer: Peer, update: ConnectionSizeUpdate) {
     const peerKey = peer.remotePublicKey.toString("hex");
     this._peerRepository.updateConnections(update.connections, peerKey);
@@ -218,6 +254,7 @@ export class SymmetryServer {
         apiProvider: message.apiProvider,
       });
       this.startPointsTracking(peer);
+      this.startHealthCheck(peer);
       logger.info(
         `👋 Peer provider joined ${peer.rawStream.remoteHost} / ${peerKey}`
       );
@@ -378,13 +415,10 @@ export class SymmetryServer {
     }
   }
 
-  private async startServer() {
+  private async startWebServer() {
     await this._server.register(fastifyWebsocket);
     await this._server.register(fastifyCors, {
-      origin: [
-        "https://twinny.dev",
-        "https://www.twinny.dev"
-      ],
+      origin: ["https://twinny.dev", "https://www.twinny.dev"],
       methods: ["GET", "POST"],
       credentials: true,
     });
@@ -459,6 +493,48 @@ export class SymmetryServer {
   private async sendStats(ws: WebSocket) {
     const stats = await this.getStats();
     ws.send(JSON.stringify(stats));
+  }
+
+  private startPointsTracking(peer: Peer) {
+    const peerKey = peer.remotePublicKey.toString("hex");
+
+    this._peerRepository.updateConnectedSince(peerKey, new Date());
+
+    const interval = setInterval(async () => {
+      try {
+        const peer = await this._peerRepository.getByKey(peerKey);
+        if (!peer?.connected_since) return;
+
+        const hoursConnected = Math.floor(
+          (Date.now() - new Date(peer.connected_since).getTime()) /
+            (1000 * 60 * 60)
+        );
+
+        const hourlyBonus = Math.min(
+          hoursConnected,
+          this.POINTS_MAX_HOURLY_BONUS
+        );
+        const pointsToAdd = 1 + hourlyBonus;
+
+        await this._peerRepository.addPoints(peerKey, pointsToAdd);
+        logger.debug(
+          `Added ${pointsToAdd} points to peer ${peerKey} (connected for ${hoursConnected} hours, bonus: +${hourlyBonus})`
+        );
+      } catch (error) {
+        logger.error(`Error updating points for peer ${peerKey}:`, error);
+      }
+    }, this.POINTS_INTERVAL_MS);
+
+    this._pointsIntervals.set(peerKey, interval);
+  }
+
+  private stopPointsTracking(peerKey: string) {
+    const interval = this._pointsIntervals.get(peerKey);
+    if (interval) {
+      clearInterval(interval);
+      this._pointsIntervals.delete(peerKey);
+      this._peerRepository.updateConnectedSince(peerKey, null);
+    }
   }
 
   async broadcastStats() {

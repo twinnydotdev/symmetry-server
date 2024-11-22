@@ -89,3 +89,9 @@ export interface IpMessageRow {
   first_seen: string;
   last_seen: string;
 }
+
+export interface HealthCheck {
+  interval: NodeJS.Timeout;
+  failures: number;
+  checkInterval: number;
+}
