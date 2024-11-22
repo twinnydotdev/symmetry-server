@@ -195,7 +195,7 @@ export class SymmetryServer {
     const peerKey = peer.remotePublicKey.toString("hex");
 
     try {
-      const testMessage = createMessage(serverMessageKeys.healthCheck, {
+      const testMessage = createMessage(serverMessageKeys.inference, {
         messages: [{ role: "user", content: "Test message" }],
         key: peer.remotePublicKey,
       });
