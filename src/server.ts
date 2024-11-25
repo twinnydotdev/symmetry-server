@@ -7,7 +7,6 @@ import {
   ChallengeRequest,
   ClientMessage,
   ConnectionSizeUpdate,
-  HealthCheck,
   PeerSessionRequest,
   PeerUpsert,
 } from "./types";
@@ -37,9 +36,7 @@ export class SymmetryServer {
   private _swarm: Hyperswarm | null = null;
   private _server = Fastify();
   private _peerReplies: Map<string, FastifyReply> = new Map();
-  private _healthChecks: Map<string, HealthCheck> = new Map();
 
-  private readonly HEALTH_CHECK_INTERVAL = 5 * 60 * 1000; // 5 minutes
   private readonly MAX_FAILURES = 3;
   private readonly MAX_REQUESTS = 100;
   private readonly POINTS_INTERVAL_MS = 1 * 60 * 1000; // 1 minute
@@ -160,79 +157,6 @@ export class SymmetryServer {
     });
   }
 
-  private startHealthCheck(peer: Peer) {
-    const peerKey = peer.remotePublicKey.toString("hex");
-
-    const check = async () => {
-      const isHealthy = await this.checkProviderHealth(peer);
-      const healthCheck = this._healthChecks.get(peerKey);
-
-      if (!healthCheck) return;
-
-      if (!isHealthy) {
-        healthCheck.failures++;
-
-        if (healthCheck.failures >= this.MAX_FAILURES) {
-          logger.warn(
-            `Peer ${peerKey} failed ${this.MAX_FAILURES} health checks, disconnecting...`
-          );
-          this.disconnectPeer(peer);
-          return;
-        }
-      } else {
-        healthCheck.failures = 0;
-      }
-    };
-
-    this._healthChecks.set(peerKey, {
-      interval: setInterval(check, this.HEALTH_CHECK_INTERVAL),
-      failures: 0,
-      checkInterval: this.HEALTH_CHECK_INTERVAL,
-    });
-  }
-
-  private async checkProviderHealth(peer: Peer) {
-    const peerKey = peer.remotePublicKey.toString("hex");
-
-    try {
-      const testMessage = createMessage(serverMessageKeys.inference, {
-        messages: [{ role: "user", content: "Test message" }],
-        key: peer.remotePublicKey,
-      });
-
-      return new Promise<boolean>((resolve) => {
-        const timeout = setTimeout(() => {
-          resolve(false);
-        }, 10000);
-
-        peer.once("data", (data) => {
-          clearTimeout(timeout);
-          const response = safeParseJson(data.toString());
-          resolve(!!response);
-        });
-
-        peer.write(testMessage);
-      });
-    } catch (error) {
-      logger.error(`Health check failed for peer ${peerKey}:`, error);
-      return false;
-    }
-  }
-
-  private disconnectPeer(peer: Peer) {
-    const peerKey = peer.remotePublicKey.toString("hex");
-
-    const healthCheck = this._healthChecks.get(peerKey);
-    if (healthCheck) {
-      clearInterval(healthCheck.interval);
-      this._healthChecks.delete(peerKey);
-    }
-
-    this._connectedPeers.delete(peerKey);
-    this._peerRepository.setPeerOffline(peerKey);
-    peer.destroy();
-  }
-
   async handleProviderConnections(peer: Peer, update: ConnectionSizeUpdate) {
     const peerKey = peer.remotePublicKey.toString("hex");
     this._peerRepository.updateConnections(update.connections, peerKey);
@@ -254,7 +178,6 @@ export class SymmetryServer {
         apiProvider: message.apiProvider,
       });
       this.startPointsTracking(peer);
-      this.startHealthCheck(peer);
       logger.info(
         `👋 Peer provider joined ${peer.rawStream.remoteHost} / ${peerKey}`
       );
