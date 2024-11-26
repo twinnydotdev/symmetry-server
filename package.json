@@ -1,6 +1,6 @@
 {
   "name": "symmetry-server",
-  "version": "1.0.17",
+  "version": "1.0.18",
   "description": "",
   "main": "src/symmetry.js",
   "bin": "src/symmetry.js",
