@@ -347,7 +347,7 @@ export class SymmetryServer {
     });
 
     this._server.post("/v1/chat/completions", async (request, reply) => {
-      const clientIp = request.headers['x-forwarded-for'] || request.ip;
+      const clientIp = request.headers['x-forwarded-for']?.toString() || request.ip
       const messageCount = await this._messageRepo.getMessageCount(
         clientIp,
         this.TIME_WINDOW
