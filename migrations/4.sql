@@ -15,7 +15,7 @@ SELECT
     key,
     created_at,
     updated_at,
-    points / 60
+    points / 5 -- approximation of duration in minutes
 FROM peers 
 WHERE points > 0;
 
