@@ -398,15 +398,19 @@ export class SymmetryServer {
 
       const peer = this._connectedPeers.get(dbPeer.key);
 
+      if (!peer) return 
+
+      this.handleInferenceRequest(peer)
+
       const peerKey = dbPeer.key;
       this._httpPeerReplies.set(peerKey, reply);
 
       const data = createMessage(serverMessageKeys.inference, {
         messages: message.data.messages,
-        key: peer?.remotePublicKey,
+        key: peer.remotePublicKey,
       });
 
-      peer?.write(data);
+      peer.write(data);
 
       request.raw.on("close", () => {
         this._httpPeerReplies.delete(peerKey);
