@@ -1,7 +1,23 @@
 import chalk from "chalk";
 import Hyperswarm from "hyperswarm";
 import crypto from "hypercore-crypto";
-import { Peer, safeParseJson, serverMessageKeys } from "symmetry-core";
+import Fastify, { FastifyReply } from "fastify";
+import fastifyWebsocket, { WebSocket } from "@fastify/websocket";
+import fastifyCors from "@fastify/cors";
+import {
+  Peer,
+  safeParseJson,
+  serverMessageKeys,
+} from "symmetry-core";
+
+import { ConfigManager } from "./config-manager";
+import { createMessage } from "./utils";
+import { logger } from "./logger";
+import { MAX_RANDOM_PEER_REQUEST_ATTEMPTS, SERVER_PORT } from "./constants";
+import { MessageRepository } from "./message-repository";
+import { PeerRepository } from "./provider-repository";
+import { ProviderSessionRepository } from "./provider-session-repository";
+import { SessionRepository } from "./session-repository";
 
 import {
   ChallengeRequest,
@@ -10,47 +26,33 @@ import {
   PeerSessionRequest,
   PeerUpsert,
 } from "./types";
-import { ConfigManager } from "./config-manager";
-import { createMessage } from "./utils";
-import { logger } from "./logger";
-import { MAX_RANDOM_PEER_REQUEST_ATTEMPTS, SERVER_PORT } from "./constants";
-import { PeerRepository } from "./provider-repository";
-import { SessionManager } from "./session-manager";
-import { SessionRepository } from "./session-repository";
-import Fastify, { FastifyReply } from "fastify";
-import fastifyWebsocket, { WebSocket } from "@fastify/websocket";
-import fastifyCors from "@fastify/cors";
-import { MessageRepository } from "./message-repository";
 
 export class SymmetryServer {
   private _config: ConfigManager;
   private _connectedPeers: Map<string, Peer>;
   private _heartbeatIntervals: Map<string, NodeJS.Timeout> = new Map();
-  private _messageRepo: MessageRepository;
+  private _httpPeerReplies: Map<string, FastifyReply> = new Map();
+  private _messageRepository: MessageRepository;
   private _missedPongs: Map<string, number> = new Map();
   private _peerRepository: PeerRepository;
   private _pointsIntervals: Map<string, NodeJS.Timeout> = new Map();
   private _pongTimeouts: Map<string, NodeJS.Timeout> = new Map();
-  private _sessionManager: SessionManager;
-  private _sessionRepository: SessionRepository;
-  private _swarm: Hyperswarm | null = null;
+  private _providerSessionRepository: ProviderSessionRepository;
   private _server = Fastify();
-  private _peerReplies: Map<string, FastifyReply> = new Map();
+  private _sessionRepository: SessionRepository;
+  public _swarm: Hyperswarm | null = null;
 
-  private readonly MAX_FAILURES = 3;
   private readonly MAX_REQUESTS = 100;
-  private readonly POINTS_INTERVAL_MS = 1 * 60 * 1000; // 1 minute
-  private readonly POINTS_MAX_HOURLY_BONUS = 6;
   private readonly TIME_WINDOW = 60;
 
   constructor(configPath: string) {
     logger.info(`🔗 Initializing server using config file: ${configPath}`);
     this._config = new ConfigManager(configPath);
+    this._connectedPeers = new Map<string, Peer>();
+    this._messageRepository = new MessageRepository();
     this._peerRepository = new PeerRepository();
     this._sessionRepository = new SessionRepository();
-    this._sessionManager = new SessionManager(this._sessionRepository, 5);
-    this._connectedPeers = new Map<string, Peer>();
-    this._messageRepo = new MessageRepository();
+    this._providerSessionRepository = new ProviderSessionRepository();
   }
 
   async init() {
@@ -92,46 +94,49 @@ export class SymmetryServer {
       logger.error("Failed to reset peer connections:", error);
     }
   }
-  
 
   listeners(peer: Peer) {
     const peerKey = peer.remotePublicKey.toString("hex");
 
+    this._providerSessionRepository.startSession(peerKey);
+
     peer.on("error", (err) => {
-      this.stopPointsTracking(peerKey);
-      const reply = this._peerReplies.get(peerKey);
+      const reply = this._httpPeerReplies.get(peerKey);
       if (reply && !reply.raw.closed) {
         reply.raw.end(`data: {"error":"Peer error: ${err.message}"}\n\n`);
       }
       return err;
     });
 
-    peer.on("close", () => {
-      this.stopPointsTracking(peerKey);
+    peer.on("close", async () => {
       this._peerRepository.setPeerOffline(peerKey);
+
+      await this._providerSessionRepository.endSession(peerKey);
+
       logger.info(`🔗 Connection closed: ${peer.rawStream.remoteHost}`);
 
-      const reply = this._peerReplies.get(peerKey);
+      const reply = this._httpPeerReplies.get(peerKey);
       if (reply && !reply.raw.closed) {
         reply.raw.end(`data: {"message":"Connection closed"}\n\n`);
       }
 
-      this._peerReplies.delete(peerKey);
+      this._httpPeerReplies.delete(peerKey);
     });
 
     peer.on("data", (message) => {
       const data = safeParseJson<ClientMessage>(message.toString());
 
-      const reply = this._peerReplies.get(peerKey);
+      const httpReply = this._httpPeerReplies.get(peerKey);
 
-      if (reply && !reply.raw.closed) {
-        return reply.raw.write(message);
-      }
+      if (httpReply && !httpReply.raw.closed)
+        return httpReply.raw.write(message);
 
       if (data && data.key) {
         switch (data?.key) {
           case serverMessageKeys.join:
             return this.handleJoin(peer, data.data as PeerUpsert);
+          case serverMessageKeys.inference:
+            return this.handleInferenceRequest(peer);
           case serverMessageKeys.challenge:
             return this.handleChallenge(peer, data.data as ChallengeRequest);
           case serverMessageKeys.conectionSize:
@@ -162,6 +167,18 @@ export class SymmetryServer {
     this._peerRepository.updateConnections(update.connections, peerKey);
   }
 
+  async handleInferenceRequest(peer: Peer) {
+    const peerKey = peer.remotePublicKey.toString("hex");
+
+    const sessionId = await this._providerSessionRepository.getActiveSessionId(
+      peerKey
+    );
+
+    if (!sessionId) return;
+
+    await this._providerSessionRepository.logRequest(sessionId);
+  }
+
   async handleJoin(peer: Peer, message: PeerUpsert) {
     const peerKey = peer.remotePublicKey.toString("hex");
     try {
@@ -177,7 +194,6 @@ export class SymmetryServer {
         website: message.website,
         apiProvider: message.apiProvider,
       });
-      this.startPointsTracking(peer);
       logger.info(
         `👋 Peer provider joined ${peer.rawStream.remoteHost} / ${peerKey}`
       );
@@ -228,13 +244,12 @@ export class SymmetryServer {
       const changes = await this._peerRepository.deletePeer(peerKey);
 
       if (changes) {
-        this.stopPointsTracking(peerKey);
         logger.info(chalk.green(`✔ Peer ${peerKey} deleted successfully`));
 
         this._pongTimeouts.delete(peerKey);
         this._missedPongs.delete(peerKey);
 
-        await this._sessionManager.deleteSession(peerKey);
+        await this._sessionRepository.deleteSession(peerKey);
 
         return true;
       } else {
@@ -282,7 +297,7 @@ export class SymmetryServer {
         return;
       }
 
-      const sessionToken = await this._sessionManager.createSession(
+      const sessionToken = await this._sessionRepository.createSession(
         providerPeer.discovery_key
       );
       peer.write(
@@ -301,7 +316,7 @@ export class SymmetryServer {
   async handleSessionValidation(peer: Peer, sessionToken: string) {
     if (!sessionToken) return;
     try {
-      const providerDiscoveryKey = await this._sessionManager.verifySession(
+      const providerDiscoveryKey = await this._sessionRepository.verifySession(
         sessionToken
       );
 
@@ -322,7 +337,7 @@ export class SymmetryServer {
         })
       );
 
-      await this._sessionManager.extendSession(sessionToken);
+      await this._sessionRepository.extendSession(sessionToken);
     } catch (error) {
       logger.error(
         `Session verification error: ${
@@ -347,8 +362,9 @@ export class SymmetryServer {
     });
 
     this._server.post("/v1/chat/completions", async (request, reply) => {
-      const clientIp = request.headers['x-forwarded-for']?.toString() || request.ip
-      const messageCount = await this._messageRepo.getMessageCount(
+      const clientIp =
+        request.headers["x-forwarded-for"]?.toString() || request.ip;
+      const messageCount = await this._messageRepository.getMessageCount(
         clientIp,
         this.TIME_WINDOW
       );
@@ -360,7 +376,7 @@ export class SymmetryServer {
         return;
       }
 
-      await this._messageRepo.incrementMessageCount(clientIp);
+      await this._messageRepository.incrementMessageCount(clientIp);
 
       reply.raw.writeHead(200, {
         "Content-Type": "text/event-stream",
@@ -383,7 +399,7 @@ export class SymmetryServer {
       const peer = this._connectedPeers.get(dbPeer.key);
 
       const peerKey = dbPeer.key;
-      this._peerReplies.set(peerKey, reply);
+      this._httpPeerReplies.set(peerKey, reply);
 
       const data = createMessage(serverMessageKeys.inference, {
         messages: message.data.messages,
@@ -393,7 +409,7 @@ export class SymmetryServer {
       peer?.write(data);
 
       request.raw.on("close", () => {
-        this._peerReplies.delete(peerKey);
+        this._httpPeerReplies.delete(peerKey);
       });
     });
 
@@ -418,68 +434,19 @@ export class SymmetryServer {
     ws.send(JSON.stringify(stats));
   }
 
-  private startPointsTracking(peer: Peer) {
-    const peerKey = peer.remotePublicKey.toString("hex");
-
-    this._peerRepository.updateConnectedSince(peerKey, new Date());
-
-    const interval = setInterval(async () => {
-      try {
-        const peer = await this._peerRepository.getByKey(peerKey);
-        if (!peer?.connected_since) return;
-
-        const hoursConnected = Math.floor(
-          (Date.now() - new Date(peer.connected_since).getTime()) /
-            (1000 * 60 * 60)
-        );
-
-        const hourlyBonus = Math.min(
-          hoursConnected,
-          this.POINTS_MAX_HOURLY_BONUS
-        );
-        const pointsToAdd = 1 + hourlyBonus;
-
-        await this._peerRepository.addPoints(peerKey, pointsToAdd);
-        logger.debug(
-          `Added ${pointsToAdd} points to peer ${peerKey} (connected for ${hoursConnected} hours, bonus: +${hourlyBonus})`
-        );
-      } catch (error) {
-        logger.error(`Error updating points for peer ${peerKey}:`, error);
-      }
-    }, this.POINTS_INTERVAL_MS);
-
-    this._pointsIntervals.set(peerKey, interval);
-  }
-
-  private stopPointsTracking(peerKey: string) {
-    const interval = this._pointsIntervals.get(peerKey);
-    if (interval) {
-      clearInterval(interval);
-      this._pointsIntervals.delete(peerKey);
-      this._peerRepository.updateConnectedSince(peerKey, null);
-    }
-  }
-
-  async broadcastStats() {
-    const stats = await this.getStats();
-    this._server.websocketServer.clients.forEach(
-      (client: { readyState: number; send: (arg0: string) => void }) => {
-        if (client.readyState === WebSocket.OPEN) {
-          client.send(JSON.stringify(stats));
-        }
-      }
-    );
-  }
-
   private async getStats() {
-    const activePeers = await this._peerRepository.getActivePeerCount();
     const activeModels = await this._peerRepository.getActiveModelCount();
-    const allPeers = await this._peerRepository.getAllPeers();
+    const activePeers = await this._peerRepository.getActivePeerCount();
+    const allPeers = await this._peerRepository.getAllPeersOnline();
+    const stats = await this._providerSessionRepository.getStats()
+    const uniquePeerCount = await this._peerRepository.getUniquePeerCount()
 
     return {
+      uniquePeerCount,
       activePeers,
       activeModels,
       allPeers,
+      stats,
     };
   }
 }

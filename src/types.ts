@@ -60,7 +60,6 @@ export interface DbPeer {
   online?: boolean;
   updated_at: Date;
   provider: string;
-  connected_since: Date | null;
   points?: number;
 }
 
@@ -88,4 +87,13 @@ export interface IpMessageRow {
   message_count: number;
   first_seen: string;
   last_seen: string;
+}
+
+export interface SessionStats {
+  totalSessions: number;
+  activeSessions: number;
+  totalRequestsToday: number;
+  totalRequests: number;
+  averageSessionMinutes: number;
+  totalProviderTime: number;
 }

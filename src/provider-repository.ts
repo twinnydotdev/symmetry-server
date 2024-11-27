@@ -15,12 +15,11 @@ const PREPARED_STATEMENTS = {
   GET_PEER_BY_DISCOVERY: "SELECT * FROM peers WHERE discovery_key = ?",
   DELETE_PEER: "DELETE FROM peers WHERE key = ?",
   UPDATE_CONNECTIONS: "UPDATE peers SET connections = ? WHERE key = ?",
-  UPDATE_LAST_SEEN: "UPDATE peers SET last_seen = ?, online = ? WHERE key = ?",
   GET_ACTIVE_PEER_COUNT:
     "SELECT COUNT(*) as count FROM peers WHERE online = TRUE",
   GET_ACTIVE_MODEL_COUNT:
     "SELECT COUNT(DISTINCT model_name) as count FROM peers WHERE online = TRUE",
-  UPDATE_CONNECTED_SINCE: "UPDATE peers SET connected_since = ? WHERE key = ?",
+  GET_UNIQUE_PROVIDER_COUNT: "SELECT COUNT(DISTINCT key) as count FROM peers",
   UPDATE_POINTS:
     "UPDATE peers SET points = COALESCE(points, 0) + ? WHERE key = ?",
 } as const;
@@ -57,19 +56,22 @@ export class PeerRepository {
       message.name,
       message.website,
       message.apiProvider,
-      message.key,
     ];
 
     const sql = `
       INSERT OR REPLACE INTO peers (
         key, discovery_key, data_collection_enabled, model_name, public,
         server_key, max_connections, name, website, provider,
-        last_seen, online, points
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, TRUE,
-        (SELECT points FROM peers WHERE key = ?))
+        online
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, TRUE)
     `;
 
-    return this.runQuery(sql, params);
+    try {
+      return this.runQuery(sql, params);
+    } catch (e) {
+      logger.error(`Failed to upsert peer ${message.key}: ${e}`);
+      throw e;
+    }
   }
 
   async getByKey(key: string): Promise<DbPeer> {
@@ -111,29 +113,6 @@ export class PeerRepository {
     ]);
   }
 
-  async updateLastSeen(peerKey: string): Promise<number> {
-    try {
-      const changes = await this.runQuery(
-        PREPARED_STATEMENTS.UPDATE_LAST_SEEN,
-        [new Date().toISOString(), false, peerKey]
-      );
-
-      if (changes > 0) {
-        logger.info(chalk.yellow("🕒 Peer disconnected"));
-      } else {
-        logger.info(chalk.yellow("⚠️ Peer not found in database"));
-      }
-
-      return changes;
-    } catch (error) {
-      logger.error(
-        chalk.red("❌ Error updating peer last seen in database:"),
-        error
-      );
-      throw error;
-    }
-  }
-
   async getActivePeerCount(): Promise<number> {
     const result = await this.getQuery<{ count: number }>(
       PREPARED_STATEMENTS.GET_ACTIVE_PEER_COUNT
@@ -148,46 +127,69 @@ export class PeerRepository {
     return result.count;
   }
 
+  async getUniquePeerCount(): Promise<number> {
+    const result = await this.getQuery<{ count: number }>(
+      PREPARED_STATEMENTS.GET_UNIQUE_PROVIDER_COUNT
+    );
+    return result.count;
+  }
+
   async getAllPeersOnline(): Promise<Peer[]> {
     const sql = `
-      SELECT id, last_seen, connected_since, points, 
-             data_collection_enabled, max_connections, 
-             connections, model_name, name, online, 
-             public, provider 
-      FROM peers 
-      WHERE online = TRUE
+      SELECT 
+        p.id,
+        p.data_collection_enabled,
+        p.max_connections,
+        p.connections,
+        p.model_name,
+        p.name,
+        p.online,
+        p.public,
+        p.provider,
+        COALESCE(ps.duration_minutes, 0) as duration_minutes
+      FROM peers p
+      LEFT JOIN (
+        SELECT 
+          peer_key,
+          SUM(duration_minutes) as duration_minutes
+        FROM provider_sessions
+        GROUP BY peer_key
+      ) ps ON ps.peer_key = p.key
+      WHERE p.online = TRUE
     `;
     return this.allQuery<Peer>(sql);
   }
 
   async getAllPeers(): Promise<Peer[]> {
     const sql = `
-      SELECT id, last_seen, connected_since, points, 
-             data_collection_enabled, max_connections, 
-             connections, model_name, name, online, 
-             public, provider 
-      FROM peers 
+      SELECT 
+        p.id,
+        p.data_collection_enabled,
+        p.max_connections,
+        p.connections,
+        p.model_name,
+        p.name,
+        p.online,
+        p.public,
+        p.provider,
+        COALESCE(ps.duration_minutes, 0) as duration_minutes
+      FROM peers p
+      LEFT JOIN (
+        SELECT 
+          peer_key,
+          SUM(duration_minutes) as duration_minutes
+        FROM provider_sessions
+        GROUP BY peer_key
+      ) ps ON ps.peer_key = p.key
     `;
     return this.allQuery<Peer>(sql);
-  }
-
-  async updateConnectedSince(
-    peerKey: string,
-    timestamp: Date | null
-  ): Promise<void> {
-    await this.runQuery(PREPARED_STATEMENTS.UPDATE_CONNECTED_SINCE, [
-      timestamp?.toISOString() ?? null,
-      peerKey,
-    ]);
   }
 
   async resetAllPeerConnections(): Promise<void> {
     await this.runQuery(`
       UPDATE peers 
       SET online = FALSE,
-          connections = 0,
-          connected_since = NULL,
-          last_seen = CURRENT_TIMESTAMP
+          connections = 0
     `);
   }
 
