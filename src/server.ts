@@ -437,7 +437,7 @@ export class SymmetryServer {
   private async getStats() {
     const activeModels = await this._peerRepository.getActiveModelCount();
     const activePeers = await this._peerRepository.getActivePeerCount();
-    const allPeers = await this._peerRepository.getAllPeersOnline();
+    const allPeers = await this._peerRepository.getAllPeers();
     const stats = await this._providerSessionRepository.getStats()
     const uniquePeerCount = await this._peerRepository.getUniquePeerCount()
 

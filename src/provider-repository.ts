@@ -134,6 +134,32 @@ export class PeerRepository {
     return result.count;
   }
 
+  async getAllPeers(): Promise<Peer[]> {
+    const sql = `
+      SELECT 
+        p.id,
+        p.data_collection_enabled,
+        p.max_connections,
+        p.connections,
+        p.model_name,
+        p.name,
+        p.online,
+        p.public,
+        p.provider,
+        COALESCE(ps.duration_minutes, 0) as duration_minutes
+      FROM peers p
+      LEFT JOIN (
+        SELECT 
+          peer_key,
+          SUM(duration_minutes) as duration_minutes
+        FROM provider_sessions
+        GROUP BY peer_key
+      ) ps ON ps.peer_key = p.key
+      ORDER BY p.online DESC, ps.duration_minutes DESC
+    `;
+    return this.allQuery<Peer>(sql);
+  }
+  
   async getAllPeersOnline(): Promise<Peer[]> {
     const sql = `
       SELECT 
@@ -156,31 +182,7 @@ export class PeerRepository {
         GROUP BY peer_key
       ) ps ON ps.peer_key = p.key
       WHERE p.online = TRUE
-    `;
-    return this.allQuery<Peer>(sql);
-  }
-
-  async getAllPeers(): Promise<Peer[]> {
-    const sql = `
-      SELECT 
-        p.id,
-        p.data_collection_enabled,
-        p.max_connections,
-        p.connections,
-        p.model_name,
-        p.name,
-        p.online,
-        p.public,
-        p.provider,
-        COALESCE(ps.duration_minutes, 0) as duration_minutes
-      FROM peers p
-      LEFT JOIN (
-        SELECT 
-          peer_key,
-          SUM(duration_minutes) as duration_minutes
-        FROM provider_sessions
-        GROUP BY peer_key
-      ) ps ON ps.peer_key = p.key
+      ORDER BY ps.duration_minutes DESC
     `;
     return this.allQuery<Peer>(sql);
   }
