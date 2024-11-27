@@ -400,7 +400,7 @@ export class SymmetryServer {
 
       if (!peer) return 
 
-      this.handleInferenceRequest(peer)
+      
 
       const peerKey = dbPeer.key;
       this._httpPeerReplies.set(peerKey, reply);
@@ -411,6 +411,8 @@ export class SymmetryServer {
       });
 
       peer.write(data);
+
+      this.handleInferenceRequest(peer)
 
       request.raw.on("close", () => {
         this._httpPeerReplies.delete(peerKey);
