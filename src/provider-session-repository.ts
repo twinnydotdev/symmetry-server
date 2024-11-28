@@ -22,6 +22,21 @@ export class ProviderSessionRepository {
     });
   }
 
+  async updateSessionDuration(peerKey: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.db.run(
+        `UPDATE provider_sessions 
+         SET duration_minutes = ROUND((JULIANDAY(CURRENT_TIMESTAMP) - JULIANDAY(start_time)) * 1440)
+         WHERE peer_key = ? AND end_time IS NULL`,
+        [peerKey],
+        (err) => {
+          if (err) reject(err);
+          resolve();
+        }
+      );
+    });
+  }
+
   async endSession(peerKey: string): Promise<void> {
     return new Promise((resolve, reject) => {
       this.db.run(

@@ -4,11 +4,7 @@ import crypto from "hypercore-crypto";
 import Fastify, { FastifyReply } from "fastify";
 import fastifyWebsocket, { WebSocket } from "@fastify/websocket";
 import fastifyCors from "@fastify/cors";
-import {
-  Peer,
-  safeParseJson,
-  serverMessageKeys,
-} from "symmetry-core";
+import { Peer, safeParseJson, serverMessageKeys } from "symmetry-core";
 
 import { ConfigManager } from "./config-manager";
 import { createMessage } from "./utils";
@@ -41,7 +37,9 @@ export class SymmetryServer {
   private _server = Fastify();
   private _sessionRepository: SessionRepository;
   public _swarm: Hyperswarm | null = null;
+  private _durationIntervals: Map<string, NodeJS.Timeout> = new Map();
 
+  private readonly DURATION_UPDATE_INTERVAL = 60000;
   private readonly MAX_REQUESTS = 100;
   private readonly TIME_WINDOW = 60;
 
@@ -100,15 +98,20 @@ export class SymmetryServer {
 
     this._providerSessionRepository.startSession(peerKey);
 
-    peer.on("error", (err) => {
-      const reply = this._httpPeerReplies.get(peerKey);
-      if (reply && !reply.raw.closed) {
-        reply.raw.end(`data: {"error":"Peer error: ${err.message}"}\n\n`);
-      }
-      return err;
-    });
+    const intervalId = setInterval(async () => {
+      await this._providerSessionRepository.updateSessionDuration(peerKey);
+    }, this.DURATION_UPDATE_INTERVAL);
+
+    this._durationIntervals.set(peerKey, intervalId);
 
     peer.on("close", async () => {
+      const interval = this._durationIntervals.get(peerKey);
+
+      if (interval) {
+        clearInterval(interval);
+        this._durationIntervals.delete(peerKey);
+      }
+
       this._peerRepository.setPeerOffline(peerKey);
 
       await this._providerSessionRepository.endSession(peerKey);
@@ -121,6 +124,14 @@ export class SymmetryServer {
       }
 
       this._httpPeerReplies.delete(peerKey);
+    });
+
+    peer.on("error", (err) => {
+      const reply = this._httpPeerReplies.get(peerKey);
+      if (reply && !reply.raw.closed) {
+        reply.raw.end(`data: {"error":"Peer error: ${err.message}"}\n\n`);
+      }
+      return err;
     });
 
     peer.on("data", (message) => {
@@ -398,9 +409,7 @@ export class SymmetryServer {
 
       const peer = this._connectedPeers.get(dbPeer.key);
 
-      if (!peer) return 
-
-      
+      if (!peer) return;
 
       const peerKey = dbPeer.key;
       this._httpPeerReplies.set(peerKey, reply);
@@ -412,7 +421,7 @@ export class SymmetryServer {
 
       peer.write(data);
 
-      this.handleInferenceRequest(peer)
+      this.handleInferenceRequest(peer);
 
       request.raw.on("close", () => {
         this._httpPeerReplies.delete(peerKey);
@@ -444,8 +453,8 @@ export class SymmetryServer {
     const activeModels = await this._peerRepository.getActiveModelCount();
     const activePeers = await this._peerRepository.getActivePeerCount();
     const allPeers = await this._peerRepository.getAllPeers();
-    const stats = await this._providerSessionRepository.getStats()
-    const uniquePeerCount = await this._peerRepository.getUniquePeerCount()
+    const stats = await this._providerSessionRepository.getStats();
+    const uniquePeerCount = await this._peerRepository.getUniquePeerCount();
 
     return {
       uniquePeerCount,
