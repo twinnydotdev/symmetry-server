@@ -82,6 +82,7 @@ export class SymmetryServer {
     try {
       logger.info("Resetting all peer connections on startup...");
       await this._peerRepository.resetAllPeerConnections();
+      await this._providerSessionRepository.endOrphanedSessions();
       this._connectedPeers.clear();
       this._heartbeatIntervals.clear();
       this._missedPongs.clear();

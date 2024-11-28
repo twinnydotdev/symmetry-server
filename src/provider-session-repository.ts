@@ -41,10 +41,23 @@ export class ProviderSessionRepository {
     return new Promise((resolve, reject) => {
       this.db.run(
         `UPDATE provider_sessions 
-         SET end_time = CURRENT_TIMESTAMP,
-         duration_minutes = ROUND((JULIANDAY(CURRENT_TIMESTAMP) - JULIANDAY(start_time)) * 1440)
+         SET end_time = CURRENT_TIMESTAMP
          WHERE peer_key = ? AND end_time IS NULL`,
         [peerKey],
+        (err) => {
+          if (err) reject(err);
+          resolve();
+        }
+      );
+    });
+  }
+
+  async endOrphanedSessions(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.db.run(
+        `UPDATE provider_sessions 
+         SET end_time = CURRENT_TIMESTAMP 
+         WHERE end_time IS NULL`,
         (err) => {
           if (err) reject(err);
           resolve();
