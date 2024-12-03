@@ -87,7 +87,6 @@ export class ProviderSessionRepository {
     averageTokenLength: number;
     startTime: number;
     totalTokens: number;
-    validCheckpoints: number;
   }): Promise<void> {
     return new Promise((resolve, reject) => {
       const query = `
@@ -98,9 +97,8 @@ export class ProviderSessionRepository {
                 total_process_time,
                 average_token_length,
                 start_time,
-                total_tokens,
-                valid_checkpoints
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                total_tokens
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
         `;
 
       const params = [
@@ -111,16 +109,12 @@ export class ProviderSessionRepository {
         metrics.averageTokenLength,
         metrics.startTime,
         metrics.totalTokens,
-        metrics.validCheckpoints,
       ];
 
       this.db.run(query, params, (err) => {
         if (err) {
           console.error("Error adding metrics to database:", err);
           reject(err);
-        } else {
-          console.log("Metrics added successfully");
-          resolve();
         }
       });
     });

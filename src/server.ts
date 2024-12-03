@@ -188,7 +188,7 @@ export class SymmetryServer {
     });
   }
 
-  async handleMetrics(peer: Peer, data: CompletionMetrics) {
+  handleMetrics = async (peer: Peer, data: CompletionMetrics) => {
     const peerKey = peer.remotePublicKey.toString("hex");
     const sessionId = await this._providerSessionRepository.getActiveSessionId(
       peerKey
@@ -204,7 +204,6 @@ export class SymmetryServer {
       averageTokenLength: data.state.averageTokenLength,
       startTime: data.state.startTime,
       totalTokens: data.state.totalTokens,
-      validCheckpoints: data.checkpoints.length,
     });
   }
 

@@ -156,8 +156,7 @@ export class PeerRepository {
         COALESCE(m.avg_token_length, 0) as avg_token_length,
         COALESCE(m.total_tokens, 0) as total_tokens,
         COALESCE(m.total_bytes, 0) as total_bytes,
-        COALESCE(m.total_process_time, 0) as total_process_time,
-        COALESCE(m.total_checkpoints, 0) as total_checkpoints
+        COALESCE(m.total_process_time, 0) as total_process_time
       FROM peers p
       LEFT JOIN (
         SELECT 
@@ -176,8 +175,7 @@ export class PeerRepository {
           AVG(m.average_token_length) as avg_token_length,
           SUM(m.total_tokens) as total_tokens,
           SUM(m.total_bytes) as total_bytes,
-          SUM(m.total_process_time) as total_process_time,
-          SUM(m.valid_checkpoints) as total_checkpoints
+          SUM(m.total_process_time) as total_process_time
         FROM metrics m
         JOIN provider_sessions ps ON ps.id = m.provider_session_id
         GROUP BY ps.peer_key
@@ -209,8 +207,7 @@ export class PeerRepository {
         COALESCE(m.avg_token_length, 0) as avg_token_length,
         COALESCE(m.total_tokens, 0) as total_tokens,
         COALESCE(m.total_bytes, 0) as total_bytes,
-        COALESCE(m.total_process_time, 0) as total_process_time,
-        COALESCE(m.total_checkpoints, 0) as total_checkpoints
+        COALESCE(m.total_process_time, 0) as total_process_time
       FROM peers p
       LEFT JOIN (
         SELECT 
@@ -229,8 +226,7 @@ export class PeerRepository {
           AVG(m.average_token_length) as avg_token_length,
           SUM(m.total_tokens) as total_tokens,
           SUM(m.total_bytes) as total_bytes,
-          SUM(m.total_process_time) as total_process_time,
-          SUM(m.valid_checkpoints) as total_checkpoints
+          SUM(m.total_process_time) as total_process_time
         FROM metrics m
         JOIN provider_sessions ps ON ps.id = m.provider_session_id
         GROUP BY ps.peer_key
