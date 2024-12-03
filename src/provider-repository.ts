@@ -136,7 +136,7 @@ export class PeerRepository {
 
   async getAllPeers(): Promise<Peer[]> {
     const sql = `
-      SELECT 
+        SELECT 
         p.id,
         p.data_collection_enabled,
         p.max_connections,
@@ -146,23 +146,50 @@ export class PeerRepository {
         p.online,
         p.public,
         p.provider,
-        COALESCE(ps.duration_minutes, 0) as duration_minutes
+        -- Provider session statistics
+        COALESCE(ps.total_duration_minutes, 0) as duration_minutes,
+        COALESCE(ps.total_sessions, 0) as total_sessions,
+        COALESCE(ps.total_requests, 0) as total_requests,
+        COALESCE(ps.active_sessions, 0) as active_sessions,
+        -- Metrics averages
+        COALESCE(m.avg_tokens_per_second, 0) as avg_tokens_per_second,
+        COALESCE(m.avg_token_length, 0) as avg_token_length,
+        COALESCE(m.total_tokens, 0) as total_tokens,
+        COALESCE(m.total_bytes, 0) as total_bytes,
+        COALESCE(m.total_process_time, 0) as total_process_time,
+        COALESCE(m.total_checkpoints, 0) as total_checkpoints
       FROM peers p
       LEFT JOIN (
         SELECT 
           peer_key,
-          SUM(duration_minutes) as duration_minutes
+          COUNT(*) as total_sessions,
+          SUM(duration_minutes) as total_duration_minutes,
+          SUM(total_requests) as total_requests,
+          SUM(CASE WHEN end_time IS NULL THEN 1 ELSE 0 END) as active_sessions
         FROM provider_sessions
         GROUP BY peer_key
       ) ps ON ps.peer_key = p.key
-      ORDER BY p.online DESC, ps.duration_minutes DESC
+      LEFT JOIN (
+        SELECT 
+          ps.peer_key,
+          AVG(m.average_tokens_per_second) as avg_tokens_per_second,
+          AVG(m.average_token_length) as avg_token_length,
+          SUM(m.total_tokens) as total_tokens,
+          SUM(m.total_bytes) as total_bytes,
+          SUM(m.total_process_time) as total_process_time,
+          SUM(m.valid_checkpoints) as total_checkpoints
+        FROM metrics m
+        JOIN provider_sessions ps ON ps.id = m.provider_session_id
+        GROUP BY ps.peer_key
+      ) m ON m.peer_key = p.key
+      ORDER BY p.online DESC, ps.total_duration_minutes DESC
     `;
     return this.allQuery<Peer>(sql);
   }
-  
+
   async getAllPeersOnline(): Promise<Peer[]> {
     const sql = `
-      SELECT 
+        SELECT 
         p.id,
         p.data_collection_enabled,
         p.max_connections,
@@ -172,17 +199,44 @@ export class PeerRepository {
         p.online,
         p.public,
         p.provider,
-        COALESCE(ps.duration_minutes, 0) as duration_minutes
+        -- Provider session statistics
+        COALESCE(ps.total_duration_minutes, 0) as duration_minutes,
+        COALESCE(ps.total_sessions, 0) as total_sessions,
+        COALESCE(ps.total_requests, 0) as total_requests,
+        COALESCE(ps.active_sessions, 0) as active_sessions,
+        -- Metrics averages
+        COALESCE(m.avg_tokens_per_second, 0) as avg_tokens_per_second,
+        COALESCE(m.avg_token_length, 0) as avg_token_length,
+        COALESCE(m.total_tokens, 0) as total_tokens,
+        COALESCE(m.total_bytes, 0) as total_bytes,
+        COALESCE(m.total_process_time, 0) as total_process_time,
+        COALESCE(m.total_checkpoints, 0) as total_checkpoints
       FROM peers p
       LEFT JOIN (
         SELECT 
           peer_key,
-          SUM(duration_minutes) as duration_minutes
+          COUNT(*) as total_sessions,
+          SUM(duration_minutes) as total_duration_minutes,
+          SUM(total_requests) as total_requests,
+          SUM(CASE WHEN end_time IS NULL THEN 1 ELSE 0 END) as active_sessions
         FROM provider_sessions
         GROUP BY peer_key
       ) ps ON ps.peer_key = p.key
-      WHERE p.online = TRUE
-      ORDER BY ps.duration_minutes DESC
+      LEFT JOIN (
+        SELECT 
+          ps.peer_key,
+          AVG(m.average_tokens_per_second) as avg_tokens_per_second,
+          AVG(m.average_token_length) as avg_token_length,
+          SUM(m.total_tokens) as total_tokens,
+          SUM(m.total_bytes) as total_bytes,
+          SUM(m.total_process_time) as total_process_time,
+          SUM(m.valid_checkpoints) as total_checkpoints
+        FROM metrics m
+        JOIN provider_sessions ps ON ps.id = m.provider_session_id
+        GROUP BY ps.peer_key
+      ) m ON m.peer_key = p.key
+      WHERE p.online IS TRUE
+      ORDER BY p.online DESC, ps.total_duration_minutes DESC
     `;
     return this.allQuery<Peer>(sql);
   }

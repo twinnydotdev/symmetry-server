@@ -4,7 +4,12 @@ import crypto from "hypercore-crypto";
 import Fastify, { FastifyReply } from "fastify";
 import fastifyWebsocket, { WebSocket } from "@fastify/websocket";
 import fastifyCors from "@fastify/cors";
-import { Peer, safeParseJson, serverMessageKeys } from "symmetry-core";
+import {
+  InferenceRequest,
+  Peer,
+  safeParseJson,
+  serverMessageKeys,
+} from "symmetry-core";
 
 import { ConfigManager } from "./config-manager";
 import { createMessage } from "./utils";
@@ -18,6 +23,7 @@ import { SessionRepository } from "./session-repository";
 import {
   ChallengeRequest,
   ClientMessage,
+  CompletionMetrics,
   ConnectionSizeUpdate,
   PeerSessionRequest,
   PeerUpsert,
@@ -38,7 +44,7 @@ export class SymmetryServer {
   private _sessionRepository: SessionRepository;
   public _swarm: Hyperswarm | null = null;
   private _durationIntervals: Map<string, NodeJS.Timeout> = new Map();
-
+  private _inferenceTokens: Set<string> = new Set<string>();
   private readonly DURATION_UPDATE_INTERVAL = 60000;
   private readonly MAX_REQUESTS = 100;
   private readonly TIME_WINDOW = 60;
@@ -148,13 +154,21 @@ export class SymmetryServer {
           case serverMessageKeys.join:
             return this.handleJoin(peer, data.data as PeerUpsert);
           case serverMessageKeys.inference:
-            return this.handleInferenceRequest(peer);
+            return this.handleInferenceRequest(
+              peer,
+              data.data as InferenceRequest
+            );
           case serverMessageKeys.challenge:
             return this.handleChallenge(peer, data.data as ChallengeRequest);
           case serverMessageKeys.conectionSize:
             return this.handleProviderConnections(
               peer,
               data.data as ConnectionSizeUpdate
+            );
+          case serverMessageKeys.sendMetrics:
+            return this.handleMetrics(
+              peer,
+              data.data as CompletionMetrics
             );
           case serverMessageKeys.requestProvider:
             return this.handleRequestProvider(
@@ -174,12 +188,34 @@ export class SymmetryServer {
     });
   }
 
+  async handleMetrics(peer: Peer, data: CompletionMetrics) {
+    const peerKey = peer.remotePublicKey.toString("hex");
+    const sessionId = await this._providerSessionRepository.getActiveSessionId(
+      peerKey
+    );
+
+    if (!sessionId) return;
+
+    await this._providerSessionRepository.addMetrics({
+      providerSessionId: sessionId,
+      averageTokensPerSecond: data.state.averageTokensPerSecond,
+      totalBytes: data.state.totalBytes,
+      totalProcessTime: data.state.totalProcessTime,
+      averageTokenLength: data.state.averageTokenLength,
+      startTime: data.state.startTime,
+      totalTokens: data.state.totalTokens,
+      validCheckpoints: data.checkpoints.length,
+    });
+  }
+
   async handleProviderConnections(peer: Peer, update: ConnectionSizeUpdate) {
     const peerKey = peer.remotePublicKey.toString("hex");
     this._peerRepository.updateConnections(update.connections, peerKey);
   }
 
-  async handleInferenceRequest(peer: Peer) {
+  async handleInferenceRequest(peer: Peer, data: InferenceRequest) {
+    this._inferenceTokens.add(data.key);
+
     const peerKey = peer.remotePublicKey.toString("hex");
 
     const sessionId = await this._providerSessionRepository.getActiveSessionId(
@@ -415,14 +451,16 @@ export class SymmetryServer {
       const peerKey = dbPeer.key;
       this._httpPeerReplies.set(peerKey, reply);
 
-      const data = createMessage(serverMessageKeys.inference, {
+      const inferenceRequest: InferenceRequest = {
         messages: message.data.messages,
-        key: peer.remotePublicKey,
-      });
+        key: peer.remotePublicKey.toString("hex"),
+      };
+
+      const data = createMessage(serverMessageKeys.inference, inferenceRequest);
 
       peer.write(data);
 
-      this.handleInferenceRequest(peer);
+      this.handleInferenceRequest(peer, inferenceRequest);
 
       request.raw.on("close", () => {
         this._httpPeerReplies.delete(peerKey);

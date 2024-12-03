@@ -1,3 +1,5 @@
+import { StreamMetrics } from "symmetry-core";
+
 export interface ServerConfig {
   path: string;
   wsPort: number;
@@ -96,4 +98,22 @@ export interface SessionStats {
   totalRequests: number;
   averageSessionMinutes: number;
   totalProviderTime: number;
+}
+
+export interface StreamMetricsState {
+  totalTokens: number;
+  checkpoints: number;
+  totalBytes: number;
+  totalProcessTime: number;
+  averageTokenLength: number;
+  startTime: number;
+  averageTokensPerSecond: number;
+}
+
+export interface CompletionMetrics {
+  requestId: string;
+  checkpoints: StreamMetrics[];
+  state: StreamMetricsState;
+  peerId: string;
+  timestamp: number;
 }

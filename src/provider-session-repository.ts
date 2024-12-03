@@ -79,6 +79,53 @@ export class ProviderSessionRepository {
     });
   }
 
+  async addMetrics(metrics: {
+    providerSessionId: number | null;
+    averageTokensPerSecond: number;
+    totalBytes: number;
+    totalProcessTime: number;
+    averageTokenLength: number;
+    startTime: number;
+    totalTokens: number;
+    validCheckpoints: number;
+  }): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const query = `
+            INSERT INTO metrics (
+                provider_session_id,
+                average_tokens_per_second,
+                total_bytes,
+                total_process_time,
+                average_token_length,
+                start_time,
+                total_tokens,
+                valid_checkpoints
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `;
+
+      const params = [
+        metrics.providerSessionId,
+        metrics.averageTokensPerSecond,
+        metrics.totalBytes,
+        metrics.totalProcessTime,
+        metrics.averageTokenLength,
+        metrics.startTime,
+        metrics.totalTokens,
+        metrics.validCheckpoints,
+      ];
+
+      this.db.run(query, params, (err) => {
+        if (err) {
+          console.error("Error adding metrics to database:", err);
+          reject(err);
+        } else {
+          console.log("Metrics added successfully");
+          resolve();
+        }
+      });
+    });
+  }
+
   async logRequest(sessionId: number): Promise<void> {
     return new Promise((resolve, reject) => {
       this.db.run(
