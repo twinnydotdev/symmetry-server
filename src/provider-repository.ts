@@ -146,12 +146,12 @@ export class PeerRepository {
         p.online,
         p.public,
         p.provider,
-        -- Provider session statistics
         COALESCE(ps.total_duration_minutes, 0) as duration_minutes,
         COALESCE(ps.total_sessions, 0) as total_sessions,
-        COALESCE(ps.total_requests, 0) as total_requests,
+        COALESCE((SELECT COUNT(*) FROM metrics m2 
+                  JOIN provider_sessions ps2 ON ps2.id = m2.provider_session_id 
+                  WHERE ps2.peer_key = p.key), 0) as total_requests,
         COALESCE(ps.active_sessions, 0) as active_sessions,
-        -- Metrics averages
         COALESCE(m.avg_tokens_per_second, 0) as avg_tokens_per_second,
         COALESCE(m.avg_token_length, 0) as avg_token_length,
         COALESCE(m.total_tokens, 0) as total_tokens,
@@ -160,22 +160,21 @@ export class PeerRepository {
       FROM peers p
       LEFT JOIN (
         SELECT 
-          peer_key,
-          COUNT(*) as total_sessions,
-          SUM(duration_minutes) as total_duration_minutes,
-          SUM(total_requests) as total_requests,
-          SUM(CASE WHEN end_time IS NULL THEN 1 ELSE 0 END) as active_sessions
+            peer_key,
+            COUNT(*) as total_sessions,
+            SUM(duration_minutes) as total_duration_minutes,
+            SUM(CASE WHEN end_time IS NULL THEN 1 ELSE 0 END) as active_sessions
         FROM provider_sessions
         GROUP BY peer_key
       ) ps ON ps.peer_key = p.key
       LEFT JOIN (
         SELECT 
-          ps.peer_key,
-          AVG(m.average_tokens_per_second) as avg_tokens_per_second,
-          AVG(m.average_token_length) as avg_token_length,
-          SUM(m.total_tokens) as total_tokens,
-          SUM(m.total_bytes) as total_bytes,
-          SUM(m.total_process_time) as total_process_time
+            ps.peer_key,
+            AVG(m.average_tokens_per_second) as avg_tokens_per_second,
+            AVG(m.average_token_length) as avg_token_length,
+            SUM(m.total_tokens) as total_tokens,
+            SUM(m.total_bytes) as total_bytes,
+            SUM(m.total_process_time) as total_process_time
         FROM metrics m
         JOIN provider_sessions ps ON ps.id = m.provider_session_id
         GROUP BY ps.peer_key
@@ -187,52 +186,51 @@ export class PeerRepository {
 
   async getAllPeersOnline(): Promise<Peer[]> {
     const sql = `
-        SELECT 
-        p.id,
-        p.data_collection_enabled,
-        p.max_connections,
-        p.connections,
-        p.model_name,
-        p.name,
-        p.online,
-        p.public,
-        p.provider,
-        -- Provider session statistics
-        COALESCE(ps.total_duration_minutes, 0) as duration_minutes,
-        COALESCE(ps.total_sessions, 0) as total_sessions,
-        COALESCE(ps.total_requests, 0) as total_requests,
-        COALESCE(ps.active_sessions, 0) as active_sessions,
-        -- Metrics averages
-        COALESCE(m.avg_tokens_per_second, 0) as avg_tokens_per_second,
-        COALESCE(m.avg_token_length, 0) as avg_token_length,
-        COALESCE(m.total_tokens, 0) as total_tokens,
-        COALESCE(m.total_bytes, 0) as total_bytes,
-        COALESCE(m.total_process_time, 0) as total_process_time
-      FROM peers p
-      LEFT JOIN (
-        SELECT 
+      SELECT 
+      p.id,
+      p.data_collection_enabled,
+      p.max_connections,
+      p.connections,
+      p.model_name,
+      p.name,
+      p.online,
+      p.public,
+      p.provider,
+      COALESCE(ps.total_duration_minutes, 0) as duration_minutes,
+      COALESCE(ps.total_sessions, 0) as total_sessions,
+      COALESCE((SELECT COUNT(*) FROM metrics m2 
+                JOIN provider_sessions ps2 ON ps2.id = m2.provider_session_id 
+                WHERE ps2.peer_key = p.key), 0) as total_requests,
+      COALESCE(ps.active_sessions, 0) as active_sessions,
+      COALESCE(m.avg_tokens_per_second, 0) as avg_tokens_per_second,
+      COALESCE(m.avg_token_length, 0) as avg_token_length,
+      COALESCE(m.total_tokens, 0) as total_tokens,
+      COALESCE(m.total_bytes, 0) as total_bytes,
+      COALESCE(m.total_process_time, 0) as total_process_time
+    FROM peers p
+    LEFT JOIN (
+      SELECT 
           peer_key,
           COUNT(*) as total_sessions,
           SUM(duration_minutes) as total_duration_minutes,
-          SUM(total_requests) as total_requests,
           SUM(CASE WHEN end_time IS NULL THEN 1 ELSE 0 END) as active_sessions
-        FROM provider_sessions
-        GROUP BY peer_key
-      ) ps ON ps.peer_key = p.key
-      LEFT JOIN (
-        SELECT 
+      FROM provider_sessions
+      GROUP BY peer_key
+    ) ps ON ps.peer_key = p.key
+    LEFT JOIN (
+      SELECT 
           ps.peer_key,
           AVG(m.average_tokens_per_second) as avg_tokens_per_second,
           AVG(m.average_token_length) as avg_token_length,
           SUM(m.total_tokens) as total_tokens,
           SUM(m.total_bytes) as total_bytes,
           SUM(m.total_process_time) as total_process_time
-        FROM metrics m
-        JOIN provider_sessions ps ON ps.id = m.provider_session_id
-        GROUP BY ps.peer_key
-      ) m ON m.peer_key = p.key
-      WHERE p.online IS TRUE
-      ORDER BY p.online DESC, ps.total_duration_minutes DESC
+      FROM metrics m
+      JOIN provider_sessions ps ON ps.id = m.provider_session_id
+      GROUP BY ps.peer_key
+    ) m ON m.peer_key = p.key
+    WHERE p.online IS TRUE
+    ORDER BY p.online DESC, ps.total_duration_minutes DESC
     `;
     return this.allQuery<Peer>(sql);
   }
