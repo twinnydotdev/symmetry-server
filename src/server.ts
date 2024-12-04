@@ -112,33 +112,12 @@ export class SymmetryServer {
     this._durationIntervals.set(peerKey, intervalId);
 
     peer.on("close", async () => {
-      const interval = this._durationIntervals.get(peerKey);
-
-      if (interval) {
-        clearInterval(interval);
-        this._durationIntervals.delete(peerKey);
-      }
-
-      this._peerRepository.setPeerOffline(peerKey);
-
-      await this._providerSessionRepository.endSession(peerKey);
-
-      logger.info(`🔗 Connection closed: ${peer.rawStream.remoteHost}`);
-
-      const reply = this._httpPeerReplies.get(peerKey);
-      if (reply && !reply.raw.closed) {
-        reply.raw.end(`data: {"message":"Connection closed"}\n\n`);
-      }
-
-      this._httpPeerReplies.delete(peerKey);
+      this.handlePeerDisconnect(peer, peerKey);
     });
 
-    peer.on("error", (err) => {
-      const reply = this._httpPeerReplies.get(peerKey);
-      if (reply && !reply.raw.closed) {
-        reply.raw.end(`data: {"error":"Peer error: ${err.message}"}\n\n`);
-      }
-      return err;
+    peer.on("error", async (err) => {
+      logger.error(`Peer error for ${peerKey}: ${err.message}`);
+      await this.handlePeerError(peer, peerKey, err);
     });
 
     peer.on("data", (message) => {
@@ -166,10 +145,7 @@ export class SymmetryServer {
               data.data as ConnectionSizeUpdate
             );
           case serverMessageKeys.sendMetrics:
-            return this.handleMetrics(
-              peer,
-              data.data as CompletionMetrics
-            );
+            return this.handleMetrics(peer, data.data as CompletionMetrics);
           case serverMessageKeys.requestProvider:
             return this.handleRequestProvider(
               peer,
@@ -186,6 +162,48 @@ export class SymmetryServer {
         console.log(chalk.red(`🔌 Connection reset by peer`));
       }
     });
+  }
+
+  private async handlePeerError(peer: Peer, peerKey: string, error: Error) {
+    logger.error(`Peer ${peerKey} error: ${error.message}`);
+
+    const reply = this._httpPeerReplies.get(peerKey);
+    if (reply && !reply.raw.closed) {
+      reply.raw.end(`data: {"error":"Peer error: ${error.message}"}\n\n`);
+    }
+
+    if (this.isFatalError(error)) {
+      await this.handlePeerDisconnect(peer, peerKey);
+    }
+  }
+
+  private async handlePeerDisconnect(peer: Peer, peerKey: string) {
+    const heartbeat = this._heartbeatIntervals.get(peerKey);
+    const pongTimeout = this._pongTimeouts.get(peerKey);
+    const durationInterval = this._durationIntervals.get(peerKey);
+
+    if (heartbeat) clearInterval(heartbeat);
+    if (pongTimeout) clearTimeout(pongTimeout);
+    if (durationInterval) clearInterval(durationInterval);
+
+    this._heartbeatIntervals.delete(peerKey);
+    this._pongTimeouts.delete(peerKey);
+    this._durationIntervals.delete(peerKey);
+    this._missedPongs.delete(peerKey);
+
+    await this._peerRepository.setPeerOffline(peerKey);
+    await this._providerSessionRepository.endSession(peerKey);
+
+    logger.info(`🔌 Peer disconnected: ${peer.rawStream.remoteHost} / ${peerKey}`);
+  }
+
+  private isFatalError(error: Error): boolean {
+    const fatalErrors = [
+      "connection reset by peer",
+      "network timeout",
+      "socket hang up",
+    ];
+    return fatalErrors.some((msg) => error.message.includes(msg));
   }
 
   handleMetrics = async (peer: Peer, data: CompletionMetrics) => {
@@ -205,7 +223,7 @@ export class SymmetryServer {
       startTime: data.state.startTime,
       totalTokens: data.state.totalTokens,
     });
-  }
+  };
 
   async handleProviderConnections(peer: Peer, update: ConnectionSizeUpdate) {
     const peerKey = peer.remotePublicKey.toString("hex");
@@ -403,7 +421,11 @@ export class SymmetryServer {
   private async startWebServer() {
     await this._server.register(fastifyWebsocket);
     await this._server.register(fastifyCors, {
-      origin: ["https://twinny.dev", "https://www.twinny.dev", "http://localhost:5173"],
+      origin: [
+        "https://twinny.dev",
+        "https://www.twinny.dev",
+        "http://localhost:5173",
+      ],
       methods: ["GET", "POST"],
       credentials: true,
     });
