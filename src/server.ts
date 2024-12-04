@@ -213,7 +213,7 @@ export class SymmetryServer {
   }
 
   async handleInferenceRequest(peer: Peer, data: InferenceRequest) {
-    this._inferenceTokens.add(data.key);
+    this._inferenceTokens.add(data?.key);
 
     const peerKey = peer.remotePublicKey.toString("hex");
 
