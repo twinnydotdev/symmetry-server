@@ -146,7 +146,7 @@ export class SymmetryServer {
 
       const httpReply = this._httpPeerReplies.get(peerKey);
 
-      if (httpReply && !httpReply.raw.closed)
+      if (httpReply && !httpReply.raw.closed && !data?.key)
         return httpReply.raw.write(message);
 
       if (data && data.key) {
