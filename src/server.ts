@@ -423,8 +423,7 @@ export class SymmetryServer {
     await this._server.register(fastifyCors, {
       origin: [
         "https://twinny.dev",
-        "https://www.twinny.dev",
-        "http://localhost:5173",
+        "https://www.twinny.dev"
       ],
       methods: ["GET", "POST"],
       credentials: true,
