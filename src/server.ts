@@ -1,9 +1,11 @@
 import chalk from "chalk";
 import Hyperswarm from "hyperswarm";
+import semver from "semver";
 import crypto from "hypercore-crypto";
 import Fastify, { FastifyReply } from "fastify";
 import fastifyWebsocket, { WebSocket } from "@fastify/websocket";
 import fastifyCors from "@fastify/cors";
+import { LRUCache } from "lru-cache";
 import {
   InferenceRequest,
   Peer,
@@ -14,7 +16,7 @@ import {
 import { ConfigManager } from "./config-manager";
 import { createMessage } from "./utils";
 import { logger } from "./logger";
-import { MAX_RANDOM_PEER_REQUEST_ATTEMPTS, SERVER_PORT } from "./constants";
+import { MAX_RANDOM_PEER_REQUEST_ATTEMPTS, MIN_SUPPORTED_SYMMETRY_CORE_VERSION, SERVER_PORT } from "./constants";
 import { MessageRepository } from "./message-repository";
 import { PeerRepository } from "./provider-repository";
 import { ProviderSessionRepository } from "./provider-session-repository";
@@ -45,9 +47,12 @@ export class SymmetryServer {
   public _swarm: Hyperswarm | null = null;
   private _durationIntervals: Map<string, NodeJS.Timeout> = new Map();
   private _inferenceTokens: Set<string> = new Set<string>();
+  private _messageRateLimitCache: LRUCache<string, number>;
+
   private readonly DURATION_UPDATE_INTERVAL = 60000;
-  private readonly MAX_REQUESTS = 100;
+  private readonly MAX_HTTP_REQUESTS = 100;
   private readonly TIME_WINDOW = 60;
+  private readonly MAX_MESSAGES_PER_MINUTE = 500;
 
   constructor(configPath: string) {
     logger.info(`🔗 Initializing server using config file: ${configPath}`);
@@ -57,6 +62,10 @@ export class SymmetryServer {
     this._peerRepository = new PeerRepository();
     this._sessionRepository = new SessionRepository();
     this._providerSessionRepository = new ProviderSessionRepository();
+    this._messageRateLimitCache = new LRUCache<string, number>({
+      max: 10000,
+      ttl: 60 * 1000,
+    });
   }
 
   async init() {
@@ -121,6 +130,15 @@ export class SymmetryServer {
     });
 
     peer.on("data", (message) => {
+      const currentCount = this._messageRateLimitCache.get(peerKey) || 0;
+
+      if (currentCount >= this.MAX_MESSAGES_PER_MINUTE) {
+        logger.warn(`Rate limit exceeded for messages from peer: ${peerKey}`);
+        return;
+      }
+
+      this._messageRateLimitCache.set(peerKey, currentCount + 1);
+
       const data = safeParseJson<ClientMessage>(message.toString());
 
       const httpReply = this._httpPeerReplies.get(peerKey);
@@ -194,7 +212,9 @@ export class SymmetryServer {
     await this._peerRepository.setPeerOffline(peerKey);
     await this._providerSessionRepository.endSession(peerKey);
 
-    logger.info(`🔌 Peer disconnected: ${peer.rawStream.remoteHost} / ${peerKey}`);
+    logger.info(
+      `🔌 Peer disconnected: ${peer.rawStream.remoteHost} / ${peerKey}`
+    );
   }
 
   private isFatalError(error: Error): boolean {
@@ -246,6 +266,17 @@ export class SymmetryServer {
 
   async handleJoin(peer: Peer, message: PeerUpsert) {
     const peerKey = peer.remotePublicKey.toString("hex");
+
+
+    const { symmetryCoreVersion } = message
+
+    if (!symmetryCoreVersion || semver.lt(symmetryCoreVersion, MIN_SUPPORTED_SYMMETRY_CORE_VERSION)) {
+      peer.write(createMessage(serverMessageKeys.versionMismatch, {
+        minVersion: MIN_SUPPORTED_SYMMETRY_CORE_VERSION,
+      }))
+      return
+    }
+
     try {
       await this._peerRepository.upsert({
         key: peerKey,
@@ -405,8 +436,7 @@ export class SymmetryServer {
       await this._sessionRepository.extendSession(sessionToken);
     } catch (error) {
       logger.error(
-        `Session verification error: ${
-          error instanceof Error ? error.message : "Unknown error"
+        `Session verification error: ${error instanceof Error ? error.message : "Unknown error"
         }`
       );
       peer.write(
@@ -421,10 +451,7 @@ export class SymmetryServer {
   private async startWebServer() {
     await this._server.register(fastifyWebsocket);
     await this._server.register(fastifyCors, {
-      origin: [
-        "https://twinny.dev",
-        "https://www.twinny.dev"
-      ],
+      origin: ["https://twinny.dev", "https://www.twinny.dev"],
       methods: ["GET", "POST"],
       credentials: true,
     });
@@ -437,9 +464,12 @@ export class SymmetryServer {
         this.TIME_WINDOW
       );
 
-      if (messageCount && messageCount.message_count >= this.MAX_REQUESTS) {
+      if (
+        messageCount &&
+        messageCount.message_count >= this.MAX_HTTP_REQUESTS
+      ) {
         reply.code(429).send({
-          error: `Rate limit exceeded, max ${this.MAX_REQUESTS} requests per ${this.TIME_WINDOW} minutes`,
+          error: `Rate limit exceeded, max ${this.MAX_HTTP_REQUESTS} requests per ${this.TIME_WINDOW} minutes`,
         });
         return;
       }

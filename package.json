@@ -25,6 +25,8 @@
     "hypercore-crypto": "^3.4.2",
     "hyperswarm": "^4.8.0",
     "js-yaml": "^4.1.0",
+    "lru-cache": "^10.4.3",
+    "semver": "^7.6.3",
     "sqlite3": "^5.1.7",
     "symmetry-core": "^1.0.28",
     "ws": "^8.18.0"
@@ -32,6 +34,7 @@
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.14.10",
+    "@types/semver": "^7.5.8",
     "@types/ws": "^8.5.11",
     "@typescript-eslint/eslint-plugin": "^7.16.1",
     "@typescript-eslint/parser": "^7.16.1",

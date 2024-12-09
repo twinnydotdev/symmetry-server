@@ -45,6 +45,7 @@ export interface PeerUpsert {
   name: string;
   website: string;
   apiProvider: string;
+  symmetryCoreVersion?: string;
 }
 
 export interface DbPeer {
