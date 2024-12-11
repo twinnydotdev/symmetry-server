@@ -60,7 +60,7 @@ export class SymmetryServer {
   private readonly MAX_MESSAGES_PER_MINUTE = 500;
   private _healthCheckTimeouts: Map<string, NodeJS.Timeout> = new Map();
   private readonly HEALTH_CHECK_TIMEOUT = 15000;
-  private readonly HEALTH_CHECK_INTERVAL = 60000;
+  private readonly HEALTH_CHECK_INTERVAL = 300000;
 
   constructor(configPath: string) {
     logger.info(`🔗 Initializing server using config file: ${configPath}`);
