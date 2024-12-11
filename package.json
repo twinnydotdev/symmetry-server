@@ -28,7 +28,7 @@
     "lru-cache": "^10.4.3",
     "semver": "^7.6.3",
     "sqlite3": "^5.1.7",
-    "symmetry-core": "^1.0.32",
+    "symmetry-core": "^1.0.33",
     "ws": "^8.18.0"
   },
   "devDependencies": {

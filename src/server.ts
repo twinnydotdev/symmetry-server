@@ -2,6 +2,7 @@ import chalk from "chalk";
 import Hyperswarm from "hyperswarm";
 import semver from "semver";
 import crypto from "hypercore-crypto";
+import cryptoLib from "node:crypto";
 import Fastify, { FastifyReply } from "fastify";
 import fastifyWebsocket, { WebSocket } from "@fastify/websocket";
 import fastifyCors from "@fastify/cors";
@@ -16,7 +17,11 @@ import {
 import { ConfigManager } from "./config-manager";
 import { createMessage } from "./utils";
 import { logger } from "./logger";
-import { MAX_RANDOM_PEER_REQUEST_ATTEMPTS, MIN_SUPPORTED_SYMMETRY_CORE_VERSION, SERVER_PORT } from "./constants";
+import {
+  MAX_RANDOM_PEER_REQUEST_ATTEMPTS,
+  MIN_SUPPORTED_SYMMETRY_CORE_VERSION,
+  SERVER_PORT,
+} from "./constants";
 import { MessageRepository } from "./message-repository";
 import { PeerRepository } from "./provider-repository";
 import { ProviderSessionRepository } from "./provider-session-repository";
@@ -53,6 +58,9 @@ export class SymmetryServer {
   private readonly MAX_HTTP_REQUESTS = 100;
   private readonly TIME_WINDOW = 60;
   private readonly MAX_MESSAGES_PER_MINUTE = 500;
+  private _healthCheckTimeouts: Map<string, NodeJS.Timeout> = new Map();
+  private readonly HEALTH_CHECK_TIMEOUT = 15000;
+  private readonly HEALTH_CHECK_INTERVAL = 60000;
 
   constructor(configPath: string) {
     logger.info(`🔗 Initializing server using config file: ${configPath}`);
@@ -169,6 +177,8 @@ export class SymmetryServer {
               peer,
               data.data as PeerSessionRequest
             );
+          case serverMessageKeys.healthCheck:
+            return this.handleHealthCheck(peer);
           case serverMessageKeys.verifySession:
             return this.handleSessionValidation(peer, data.data as string);
         }
@@ -180,6 +190,18 @@ export class SymmetryServer {
         console.log(chalk.red(`🔌 Connection reset by peer`));
       }
     });
+  }
+
+  private async handleHealthCheck(peer: Peer) {
+    const peerKey = peer.remotePublicKey.toString("hex");
+
+    const timeout = this._healthCheckTimeouts.get(peerKey);
+
+    if (timeout) {
+      clearTimeout(timeout);
+      this._healthCheckTimeouts.delete(peerKey);
+      peer.write(createMessage(serverMessageKeys.healthCheckAck));
+    }
   }
 
   private async handlePeerError(peer: Peer, peerKey: string, error: Error) {
@@ -267,14 +289,18 @@ export class SymmetryServer {
   async handleJoin(peer: Peer, message: PeerUpsert) {
     const peerKey = peer.remotePublicKey.toString("hex");
 
+    const { symmetryCoreVersion } = message;
 
-    const { symmetryCoreVersion } = message
-
-    if (!symmetryCoreVersion || semver.lt(symmetryCoreVersion, MIN_SUPPORTED_SYMMETRY_CORE_VERSION)) {
-      peer.write(createMessage(serverMessageKeys.versionMismatch, {
-        minVersion: MIN_SUPPORTED_SYMMETRY_CORE_VERSION,
-      }))
-      return
+    if (
+      !symmetryCoreVersion ||
+      semver.lt(symmetryCoreVersion, MIN_SUPPORTED_SYMMETRY_CORE_VERSION)
+    ) {
+      peer.write(
+        createMessage(serverMessageKeys.versionMismatch, {
+          minVersion: MIN_SUPPORTED_SYMMETRY_CORE_VERSION,
+        })
+      );
+      return;
     }
 
     try {
@@ -300,6 +326,8 @@ export class SymmetryServer {
         })
       );
       this._connectedPeers.set(peerKey, peer);
+
+      this.startHealthCheck(peer);
     } catch (error: unknown) {
       let errorMessage = "";
       if (error instanceof Error) errorMessage = error.message;
@@ -436,7 +464,8 @@ export class SymmetryServer {
       await this._sessionRepository.extendSession(sessionToken);
     } catch (error) {
       logger.error(
-        `Session verification error: ${error instanceof Error ? error.message : "Unknown error"
+        `Session verification error: ${
+          error instanceof Error ? error.message : "Unknown error"
         }`
       );
       peer.write(
@@ -532,6 +561,31 @@ export class SymmetryServer {
       process.exit(1);
     }
   }
+
+  private startHealthCheck = (peer: Peer) => {
+    const peerKey = peer.remotePublicKey.toString("hex");
+
+    const sendHealthCheck = () => {
+      peer.write(
+        createMessage(serverMessageKeys.healthCheck, {
+          timestamp: Date.now(),
+          requestId: cryptoLib.randomBytes(16).toString("hex"),
+        })
+      );
+
+      const timeout = setTimeout(() => {
+        logger.warn(`Health check timeout for peer: ${peerKey}`);
+        this.handlePeerDisconnect(peer, peerKey);
+      }, this.HEALTH_CHECK_TIMEOUT);
+
+      this._healthCheckTimeouts.set(peerKey, timeout);
+    };
+
+    sendHealthCheck();
+
+    const intervalId = setInterval(sendHealthCheck, this.HEALTH_CHECK_INTERVAL);
+    this._heartbeatIntervals.set(peerKey, intervalId);
+  };
 
   private async sendStats(ws: WebSocket) {
     const stats = await this.getStats();
