@@ -540,8 +540,6 @@ export class SymmetryServer {
 
       peer.write(data);
 
-      this.handleInferenceRequest(peer, inferenceRequest);
-
       request.raw.on("close", () => {
         this._httpPeerReplies.delete(peerKey);
       });
