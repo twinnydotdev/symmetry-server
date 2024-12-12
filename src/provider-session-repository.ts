@@ -84,6 +84,7 @@ export class ProviderSessionRepository extends BaseRepository {
   }
 
   async logRequest(sessionId: number): Promise<void> {
+    console.log("Logging request for session:", sessionId);
     await this.runQuery(
       "UPDATE provider_sessions SET total_requests = total_requests + 1 WHERE id = ?",
       [sessionId]
@@ -94,7 +95,9 @@ export class ProviderSessionRepository extends BaseRepository {
     const row = await this.getQuery<SessionStats>(
       `SELECT 
         COUNT(*) as totalSessions,
-        SUM(CASE WHEN date(start_time) = date('now') THEN total_requests ELSE 0 END) as totalRequestsToday,
+        SUM(CASE 
+        WHEN date(start_time) = date('now') AND datetime(start_time) <= datetime('now') 
+        THEN total_requests ELSE 0 END) as totalRequestsToday,
         SUM(total_requests) as totalRequests,
         ROUND(AVG(CASE WHEN duration_minutes IS NOT 0 THEN duration_minutes ELSE NULL END), 2) as averageSessionMinutes,
         SUM(duration_minutes) as totalProviderTime
