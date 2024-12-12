@@ -91,7 +91,8 @@ export class SymmetryServer {
     const discovery = swarm.join(discoveryKey, { server: true });
     await discovery.flushed();
     swarm.on("connection", (peer: Peer) => {
-      logger.info(`🔗 New Connection: ${peer.rawStream.remoteHost}`);
+      logger.info(peer.rawStream.remoteHost);
+      this.logIpAddress(peer);
       this.listeners(peer);
     });
     this.startWebServer();
@@ -234,6 +235,7 @@ export class SymmetryServer {
     await this._peerRepository.setPeerOffline(peerKey);
     await this._providerSessionRepository.endSession(peerKey);
 
+    this.logIpAddress(peer);
     logger.info(
       `🔌 Peer disconnected: ${peer.rawStream.remoteHost} / ${peerKey}`
     );
@@ -606,5 +608,9 @@ export class SymmetryServer {
       allPeers,
       stats,
     };
+  }
+
+  private logIpAddress(peer: Peer) {
+    console.log(peer.rawStream.remoteHost);
   }
 }
