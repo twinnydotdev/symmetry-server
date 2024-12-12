@@ -92,7 +92,6 @@ export class SymmetryServer {
     await discovery.flushed();
     swarm.on("connection", (peer: Peer) => {
       logger.info(peer.rawStream.remoteHost);
-      this.logIpAddress(peer);
       this.listeners(peer);
     });
     this.startWebServer();
@@ -143,6 +142,7 @@ export class SymmetryServer {
 
       if (currentCount >= this.MAX_MESSAGES_PER_MINUTE) {
         logger.warn(`Rate limit exceeded for messages from peer: ${peerKey}`);
+        logger.info(message);
         return;
       }
 
@@ -235,7 +235,6 @@ export class SymmetryServer {
     await this._peerRepository.setPeerOffline(peerKey);
     await this._providerSessionRepository.endSession(peerKey);
 
-    this.logIpAddress(peer);
     logger.info(
       `🔌 Peer disconnected: ${peer.rawStream.remoteHost} / ${peerKey}`
     );
@@ -608,9 +607,5 @@ export class SymmetryServer {
       allPeers,
       stats,
     };
-  }
-
-  private logIpAddress(peer: Peer) {
-    console.log(peer.rawStream.remoteHost);
   }
 }
