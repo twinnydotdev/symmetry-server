@@ -1,17 +1,17 @@
 import fs from "fs";
 import yaml from "js-yaml";
 
-import { ServerConfig } from "./types";
+import { Config } from "./types";
 
-export class ConfigManager {
-  private config: ServerConfig;
+export class ServerConfig {
+  private config: Config;
 
   constructor(configPath: string) {
     const configFile = fs.readFileSync(configPath, "utf8");
-    const loadedConfig = yaml.load(configFile) as Partial<ServerConfig>;
+    const loadedConfig = yaml.load(configFile) as Partial<Config>;
     this.config = {
       ...loadedConfig,
-    } as ServerConfig;
+    } as Config;
     this.validate();
   }
 
@@ -20,11 +20,12 @@ export class ConfigManager {
   }
 
   private validate(): void {
-    const requiredFields: (keyof ServerConfig)[] = [
+    const requiredFields: (keyof Config)[] = [
       "path",
-      "wsPort",
       "publicKey",
       "privateKey",
+      "allowedOrigins",
+      "apiPort",
     ];
 
     for (const field of requiredFields) {
@@ -35,15 +36,15 @@ export class ConfigManager {
       }
     }
 
-    if (typeof this.config.wsPort !== "number") {
+    if (typeof this.config.apiPort !== "number") {
       throw new Error(
-        `Invalid value for wsPort in client configuration: ${this.config.wsPort}`
+        `Invalid value for wsPort in client configuration: ${this.config.apiPort}`
       );
     }
   }
 
-  get<K extends keyof ServerConfig>(key: K): ServerConfig[K];
+  get<K extends keyof Config>(key: K): Config[K];
   get(key: string): unknown {
-    return this.config[key as keyof ServerConfig];
+    return this.config[key as keyof Config];
   }
 }
