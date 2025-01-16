@@ -96,6 +96,7 @@ export class WebServer {
       peer.write(data);
 
       request.raw.on("close", () => {
+        reply.raw.end();
         this.httpPeerReplies.delete(peerKey);
       });
     });
