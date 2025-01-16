@@ -1,10 +1,11 @@
 import { StreamMetrics } from "symmetry-core";
 
-export interface ServerConfig {
+export interface Config {
+  allowedOrigins: string[]
   path: string;
-  wsPort: number;
-  publicKey: string;
   privateKey: string;
+  publicKey: string;
+  apiPort: number;
 }
 
 export interface ClientMessage<T = unknown> {
@@ -45,6 +46,7 @@ export interface PeerUpsert {
   name: string;
   website: string;
   apiProvider: string;
+  symmetryCoreVersion?: string;
 }
 
 export interface DbPeer {
