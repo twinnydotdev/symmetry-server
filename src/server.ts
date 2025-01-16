@@ -157,6 +157,12 @@ export class SymmetryServer {
       if (httpReply && !httpReply.raw.closed && !data?.key)
         return httpReply.raw.write(message);
 
+      if (data?.key === serverMessageKeys.inferenceEnded) {
+        if (httpReply) {
+          httpReply.raw.end();
+        }  
+      }
+
       if (data && data.key) {
         switch (data?.key) {
           case serverMessageKeys.join:
