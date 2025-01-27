@@ -100,7 +100,7 @@ export class WebServer {
       });
     });
 
-    const WEBSOCKET_INTERVAL = 5000;
+    const WEBSOCKET_INTERVAL = 30000; // Increased to 30 seconds to reduce server load while maintaining responsiveness
 
     this._server.get("/ws", { websocket: true }, (ws) => {
       this.sendStats(ws);

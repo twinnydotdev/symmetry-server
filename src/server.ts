@@ -73,8 +73,8 @@ export class SymmetryServer {
     );
 
     this._messageRateLimitCache = new LRUCache<string, number>({
-      max: 10000,
-      ttl: 60 * 1000,
+      max: 1000, // Reduced to 1000 entries to lower memory usage while maintaining rate limiting effectiveness
+      ttl: 60 * 1000, // Keep 60 second TTL as it's important for rate limiting
     });
   }
 
