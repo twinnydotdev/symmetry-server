@@ -20,6 +20,7 @@ export class WebServer {
   private readonly TIME_WINDOW = 60;
   public connectedPeers: Map<string, Peer> = new Map();
   public httpPeerReplies: Map<string, FastifyReply> = new Map();
+  private _wsIntervals: Map<WebSocket, NodeJS.Timeout> = new Map();
 
   constructor(
     config: ServerConfig,
@@ -100,11 +101,28 @@ export class WebServer {
       });
     });
 
-    const WEBSOCKET_INTERVAL = 30000; // Increased to 30 seconds to reduce server load while maintaining responsiveness
+    const WEBSOCKET_INTERVAL = 30000;
+    this._server.get("/ws", { websocket: true }, (connection) => {
+      this.sendStats(connection);
 
-    this._server.get("/ws", { websocket: true }, (ws) => {
-      this.sendStats(ws);
-      setInterval(() => this.sendStats(ws), WEBSOCKET_INTERVAL);
+      const intervalId = setInterval(() => {
+        if (connection.readyState === 1) {
+          this.sendStats(connection);
+        } else {
+          clearInterval(intervalId);
+          this._wsIntervals.delete(connection);
+        }
+      }, WEBSOCKET_INTERVAL);
+
+      this._wsIntervals.set(connection, intervalId);
+
+      connection.on('close', () => {
+        const interval = this._wsIntervals.get(connection);
+        if (interval) {
+          clearInterval(interval);
+          this._wsIntervals.delete(connection);
+        }
+      });
     });
 
     try {

@@ -2,6 +2,14 @@ import { BaseRepository } from "./base-repository";
 import { database } from "./database";
 import { SessionStats } from "./types";
 
+interface SessionStatsRow {
+  total_sessions: number;
+  total_requests_today: number;
+  total_requests: number;
+  average_session_minutes: number;
+  total_provider_time: number;
+}
+
 export class ProviderSessionRepository extends BaseRepository {
   constructor() {
     super(database);
@@ -92,25 +100,22 @@ export class ProviderSessionRepository extends BaseRepository {
   }
 
   async getStats(): Promise<SessionStats> {
-    const row = await this.getQuery<SessionStats>(
-      `SELECT 
-        COUNT(*) as totalSessions,
-        SUM(CASE 
-        WHEN date(start_time) = date('now') AND datetime(start_time) <= datetime('now') 
-        THEN total_requests ELSE 0 END) as totalRequestsToday,
-        SUM(total_requests) as totalRequests,
-        ROUND(AVG(CASE WHEN duration_minutes IS NOT 0 THEN duration_minutes ELSE NULL END), 2) as averageSessionMinutes,
-        SUM(duration_minutes) as totalProviderTime
-      FROM provider_sessions`
+    // Use the materialized view for better performance
+    const row = await this.getQuery<SessionStatsRow>(
+      `SELECT * FROM provider_session_stats`
+    );
+
+    const activeSessions = await this.getQuery<{count: number}>(
+      `SELECT COUNT(*) as count FROM provider_sessions WHERE end_time IS NULL`
     );
 
     return {
-      totalSessions: row.totalSessions || 0,
-      activeSessions: row.activeSessions || 0,
-      totalRequests: row.totalRequests || 0,
-      totalRequestsToday: row.totalRequestsToday || 0,
-      averageSessionMinutes: row.averageSessionMinutes || 0,
-      totalProviderTime: row.totalProviderTime || 0,
+      totalSessions: row?.total_sessions || 0,
+      activeSessions: activeSessions?.count || 0,
+      totalRequests: row?.total_requests || 0,
+      totalRequestsToday: row?.total_requests_today || 0,
+      averageSessionMinutes: row?.average_session_minutes || 0,
+      totalProviderTime: row?.total_provider_time || 0,
     };
   }
 }

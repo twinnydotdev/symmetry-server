@@ -37,7 +37,8 @@ export class SymmetryServer {
   private _config: ServerConfig;
   private _durationIntervals: Map<string, NodeJS.Timeout> = new Map();
   private _heartbeatIntervals: Map<string, NodeJS.Timeout> = new Map();
-  private _inferenceTokens: Set<string> = new Set<string>();
+  // Map inference tokens to peer keys for cleanup
+  private _inferenceTokens: Map<string, string> = new Map();
   private _messageRateLimitCache: LRUCache<string, number>;
   private _messageRepository: MessageRepository;
   private _missedPongs: Map<string, number> = new Map();
@@ -49,12 +50,12 @@ export class SymmetryServer {
   private _swarm: Hyperswarm | null = null;
   private _webServer: WebServer;
 
-  private readonly DURATION_UPDATE_INTERVAL = 60000;
+  private readonly DURATION_UPDATE_INTERVAL = 300000;
 
   private readonly MAX_MESSAGES_PER_MINUTE = 500;
   private _healthCheckTimeouts: Map<string, NodeJS.Timeout> = new Map();
   private readonly HEALTH_CHECK_TIMEOUT = 15000;
-  private readonly HEALTH_CHECK_INTERVAL = 300000;
+  private readonly HEALTH_CHECK_INTERVAL = 900000;
 
   constructor(configPath: string) {
     logger.info(`🔗 Initializing server using config file: ${configPath}`);
@@ -71,10 +72,17 @@ export class SymmetryServer {
       this._providerSessionRepository,
       this._messageRepository
     );
-
     this._messageRateLimitCache = new LRUCache<string, number>({
-      max: 1000, // Reduced to 1000 entries to lower memory usage while maintaining rate limiting effectiveness
-      ttl: 60 * 1000, // Keep 60 second TTL as it's important for rate limiting
+      max: 1000,
+      ttl: 60 * 1000,
+    });
+
+    process.on("uncaughtException", (err) => {
+      if (err.message === "connection reset by peer") {
+        logger.error(chalk.red(`🔌 Connection reset by peer`));
+      } else {
+        logger.error(chalk.red(`Uncaught exception: ${err.message}`));
+      }
     });
   }
 
@@ -160,7 +168,7 @@ export class SymmetryServer {
       if (data?.key === serverMessageKeys.inferenceEnded) {
         if (httpReply) {
           httpReply.raw.end();
-        }  
+        }
       }
 
       if (data && data.key) {
@@ -193,12 +201,6 @@ export class SymmetryServer {
         }
       }
     });
-
-    process.on("uncaughtException", (err) => {
-      if (err.message === "connection reset by peer") {
-        console.log(chalk.red(`🔌 Connection reset by peer`));
-      }
-    });
   }
 
   private async handleHealthCheck(peer: Peer) {
@@ -227,18 +229,29 @@ export class SymmetryServer {
   }
 
   private async handlePeerDisconnect(peer: Peer, peerKey: string) {
+    // Clear all intervals and timeouts
     const heartbeat = this._heartbeatIntervals.get(peerKey);
     const pongTimeout = this._pongTimeouts.get(peerKey);
     const durationInterval = this._durationIntervals.get(peerKey);
+    const healthCheckTimeout = this._healthCheckTimeouts.get(peerKey);
 
     if (heartbeat) clearInterval(heartbeat);
     if (pongTimeout) clearTimeout(pongTimeout);
     if (durationInterval) clearInterval(durationInterval);
+    if (healthCheckTimeout) clearTimeout(healthCheckTimeout);
 
     this._heartbeatIntervals.delete(peerKey);
     this._pongTimeouts.delete(peerKey);
     this._durationIntervals.delete(peerKey);
     this._missedPongs.delete(peerKey);
+    this._healthCheckTimeouts.delete(peerKey);
+    this._webServer.connectedPeers.delete(peerKey);
+
+    for (const [token, tokenPeerKey] of this._inferenceTokens.entries()) {
+      if (tokenPeerKey === peerKey) {
+        this._inferenceTokens.delete(token);
+      }
+    }
 
     await this._peerRepository.setPeerOffline(peerKey);
     await this._providerSessionRepository.endSession(peerKey);
@@ -282,9 +295,11 @@ export class SymmetryServer {
   }
 
   async handleInferenceRequest(peer: Peer, data: InferenceRequest) {
-    this._inferenceTokens.add(data?.key);
-
     const peerKey = peer.remotePublicKey.toString("hex");
+    
+    if (data?.key) {
+      this._inferenceTokens.set(data.key, peerKey);
+    }
 
     const sessionId = await this._providerSessionRepository.getActiveSessionId(
       peerKey
