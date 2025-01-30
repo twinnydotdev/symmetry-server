@@ -15,9 +15,15 @@ async function runMigrations() {
     });
 
     const files = await fs.readdir(__dirname);
-    const migrations = files.filter(
-      (file) => file.endsWith(".sql") && file !== "seed.sql"
-    );
+    const migrations = files
+      .filter((file) => file.endsWith(".sql") && file !== "seed.sql")
+      .sort((a, b) => {
+        const numA = parseInt(a.split(".")[0], 10);
+        const numB = parseInt(b.split(".")[0], 10);
+        return numA - numB;
+      });
+
+    console.log(migrations);
 
     for (const file of migrations) {
       const id = file.replace(".sql", "");

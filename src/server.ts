@@ -211,6 +211,7 @@ export class SymmetryServer {
     if (timeout) {
       clearTimeout(timeout);
       this._healthCheckTimeouts.delete(peerKey);
+      this._peerRepository.updatePeerHealthStatus(peerKey, true);
       peer.write(createMessage(serverMessageKeys.healthCheckAck));
     }
   }
@@ -296,7 +297,7 @@ export class SymmetryServer {
 
   async handleInferenceRequest(peer: Peer, data: InferenceRequest) {
     const peerKey = peer.remotePublicKey.toString("hex");
-    
+
     if (data?.key) {
       this._inferenceTokens.set(data.key, peerKey);
     }
@@ -514,7 +515,8 @@ export class SymmetryServer {
 
       const timeout = setTimeout(() => {
         logger.warn(`Health check timeout for peer: ${peerKey}`);
-        this.handlePeerDisconnect(peer, peerKey);
+        this._peerRepository.updatePeerHealthStatus(peerKey, false);
+        peer.write(createMessage("healthCheckFailed"));
       }, this.HEALTH_CHECK_TIMEOUT);
 
       this._healthCheckTimeouts.set(peerKey, timeout);

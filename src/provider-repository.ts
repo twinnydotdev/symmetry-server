@@ -17,6 +17,7 @@ const PREPARED_STATEMENTS = {
   GET_UNIQUE_PROVIDER_COUNT: "SELECT COUNT(DISTINCT key) as count FROM peers",
   UPDATE_POINTS:
     "UPDATE peers SET points = COALESCE(points, 0) + ? WHERE key = ?",
+  UPDATE_PEER_HEALTH_STATUS: "UPDATE peers SET healthy = ? WHERE key = ?", // New statement
 } as const;
 
 export class PeerRepository extends BaseRepository {
@@ -189,6 +190,7 @@ export class PeerRepository extends BaseRepository {
         p.online,
         p.public,
         p.provider,
+        p.healthy,
         COALESCE(ps.total_duration_minutes, 0) as duration_minutes,
         COALESCE(ps.total_sessions, 0) as total_sessions,
         COALESCE((SELECT COUNT(*) FROM metrics m2 
@@ -238,5 +240,23 @@ export class PeerRepository extends BaseRepository {
 
   async addPoints(peerKey: string, points: number): Promise<void> {
     await this.runQuery(PREPARED_STATEMENTS.UPDATE_POINTS, [points, peerKey]);
+  }
+
+  async updatePeerHealthStatus(
+    peerKey: string,
+    isHealthy: boolean
+  ): Promise<void> {
+    try {
+      await this.runQuery(PREPARED_STATEMENTS.UPDATE_PEER_HEALTH_STATUS, [
+        isHealthy,
+        peerKey,
+      ]);
+      logger.info(`Updated health status for peer ${peerKey} to ${isHealthy}`);
+    } catch (error) {
+      logger.error(
+        `Failed to update health status for peer ${peerKey}: ${error}`
+      );
+      throw error;
+    }
   }
 }
