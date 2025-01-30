@@ -23,8 +23,6 @@ async function runMigrations() {
         return numA - numB;
       });
 
-    console.log(migrations);
-
     for (const file of migrations) {
       const id = file.replace(".sql", "");
 
