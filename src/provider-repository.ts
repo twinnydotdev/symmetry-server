@@ -90,7 +90,7 @@ export class PeerRepository extends BaseRepository {
   async getRandom(request: PeerSessionRequest): Promise<DbPeer> {
     const sql = `
       SELECT * FROM peers 
-      WHERE model_name = ? AND online = TRUE 
+      WHERE model_name = ? AND online = TRUE AND healthy = TRUE
       ORDER BY RANDOM() 
       LIMIT 1
     `;
